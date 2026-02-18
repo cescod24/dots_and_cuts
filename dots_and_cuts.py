@@ -13,68 +13,89 @@ class Board:
         self.z = [[0] * size for _ in range(size)]
 
     def recompute_z(self):
+        """
+        Recompute the z grid based on current towers and bunkers.
+        Note: (x, y) is user-facing, but all internal matrices are accessed as [y][x].
+        """
         tower_influence = [[False] * self.size for _ in range(self.size)]
         bunker_influence = [[False] * self.size for _ in range(self.size)]
 
-        for i in range(self.size - 1):
-            for j in range(self.size - 1):
-                if self.towers[i][j]:
-                    tower_influence[i][j] = True
-                    tower_influence[i+1][j] = True
-                    tower_influence[i][j+1] = True
-                    tower_influence[i+1][j+1] = True
-                if self.bunkers[i][j]:
-                    bunker_influence[i][j] = True
-                    bunker_influence[i+1][j] = True
-                    bunker_influence[i][j+1] = True
-                    bunker_influence[i+1][j+1] = True
+        # Loop order: y is row, x is column. Internal access is [y][x].
+        for y in range(self.size - 1):
+            for x in range(self.size - 1):
+                if self.towers[y][x]:
+                    tower_influence[y][x] = True
+                    tower_influence[y+1][x] = True
+                    tower_influence[y][x+1] = True
+                    tower_influence[y+1][x+1] = True
+                if self.bunkers[y][x]:
+                    bunker_influence[y][x] = True
+                    bunker_influence[y+1][x] = True
+                    bunker_influence[y][x+1] = True
+                    bunker_influence[y+1][x+1] = True
 
-        for i in range(self.size):
-            for j in range(self.size):
-                if tower_influence[i][j] and bunker_influence[i][j]:
-                    self.z[i][j] = 0
-                elif tower_influence[i][j]:
-                    self.z[i][j] = 1
-                elif bunker_influence[i][j]:
-                    self.z[i][j] = -1
+        for y in range(self.size):
+            for x in range(self.size):
+                if tower_influence[y][x] and bunker_influence[y][x]:
+                    self.z[y][x] = 0
+                elif tower_influence[y][x]:
+                    self.z[y][x] = 1
+                elif bunker_influence[y][x]:
+                    self.z[y][x] = -1
                 else:
-                    self.z[i][j] = 0
+                    self.z[y][x] = 0
 
-    def place_tower(self, i, j):
-        self.towers[i][j] = True
+    def place_tower(self, x, y):
+        """
+        Place a tower at (x, y) as provided by user.
+        Internally, access self.towers as [y][x].
+        """
+        self.towers[y][x] = True
         self.recompute_z()
 
-    def place_bunker(self, i, j):
-        self.bunkers[i][j] = True
+    def place_bunker(self, x, y):
+        """
+        Place a bunker at (x, y) as provided by user.
+        Internally, access self.bunkers as [y][x].
+        """
+        self.bunkers[y][x] = True
         self.recompute_z()
 
-    def place_lake(self, i, j):
-        self.lakes[i][j] = True
+    def place_lake(self, x, y, game_state=None):
+        """
+        Place a lake at (x, y) as provided by user.
+        Internally, access self.lakes as [y][x].
+        """
+        self.lakes[y][x] = True
 
     def print_board(self):
+        """
+        Print the current board state.
+        Note: (x, y) is user-facing, but all internal matrices are accessed as [y][x].
+        """
         # Print z grid (vertices) only with + for 1, - for -1, and . for 0
         print("Vertices (z grid):")
-        for i in range(self.size):
+        for y in range(self.size):
             row = []
-            for j in range(self.size):
-                if self.z[i][j] == 1:
+            for x in range(self.size):
+                if self.z[y][x] == 1:
                     row.append("+")
-                elif self.z[i][j] == -1:
+                elif self.z[y][x] == -1:
                     row.append("-")
                 else:
                     row.append(".")
             print(" ".join(row))
         print()
-        # Print cell grid with towers, bunkers, empty as '.'
-        print("Cells (towers: o, bunkers: v, empty: .):")
-        for i in range(self.size - 1):
+        # Print cell grid with towers, bunkers, lakes, empty as '.'
+        print("Cells (towers: o, bunkers: v, lakes: x, empty: .):")
+        for y in range(self.size - 1):
             row = []
-            for j in range(self.size - 1):
-                if self.towers[i][j]:
+            for x in range(self.size - 1):
+                if self.towers[y][x]:
                     cell = "o"
-                elif self.bunkers[i][j]:
+                elif self.bunkers[y][x]:
                     cell = "v"
-                elif self.lakes[i][j]:
+                elif self.lakes[y][x]:
                     cell = "x"
                 else:
                     cell = "."
@@ -87,6 +108,33 @@ class GameState:
         self.board = board
         self.pieces = []  # List to hold pieces
         self.visited_edges = set() 
+        self.move_counter = 0  # global counter to track arrival order on vertices
+        self.initialize_lake_edges()
+
+    def initialize_lake_edges(self):
+        """
+        Mark all edges around all lake cells (orthogonal and diagonal) as visited.
+        Note: (x, y) is user-facing, but all internal matrices are accessed as [y][x].
+        """
+        for y in range(self.board.size - 1):
+            for x in range(self.board.size - 1):
+                if self.board.lakes[y][x]:
+                    # Vertices of cell (x, y): (x, y), (x+1, y), (x, y+1), (x+1, y+1)
+                    v_tl = (x, y)
+                    v_tr = (x+1, y)
+                    v_bl = (x, y+1)
+                    v_br = (x+1, y+1)
+                    # Four sides and two diagonals
+                    edges = [
+                        (v_tl, v_tr),  # top
+                        (v_tr, v_br),  # right
+                        (v_br, v_bl),  # bottom
+                        (v_bl, v_tl),  # left
+                        (v_tl, v_br),  # diagonal
+                        (v_tr, v_bl)   # diagonal
+                    ]
+                    for v1, v2 in edges:
+                        self.add_visited_edge(v1, v2)
 
     def setup_board(self):
         # Placeholder for board setup logic if needed
@@ -113,13 +161,94 @@ class GameState:
         edge = tuple(sorted([v1, v2]))
         return edge in self.visited_edges
 
+    def resolve_vertex_conflict(self, vertex, attacking_piece):
+        """
+        Handles combat resolution on a vertex.
+
+        Rules:
+        - If exactly 1 opponent is present → standard 1v1:
+          the opponent dies and the attacker survives.
+        - If 2 or more opponents are present → collapse rule:
+          the last arrived opponent dies and the attacker also dies.
+        """
+        x, y = vertex
+
+        # Find opponent pieces on the same vertex
+        opponents = [
+            p for p in self.pieces
+            if p.x == x and p.y == y and p.player != attacking_piece.player
+        ]
+
+        if len(opponents) == 0:
+            return  # No combat
+
+        # 1v1 case
+        if len(opponents) == 1:
+            opponent = opponents[0]
+            if opponent in self.pieces:
+                self.pieces.remove(opponent)
+                print(f"Player {opponent} was captured.")
+            return  # attacker survives
+
+        # Collapse case: 2 or more opponents
+        last_arrived = max(opponents, key=lambda p: p.arrival_order)
+
+        if last_arrived in self.pieces:
+            self.pieces.remove(last_arrived)
+            print(f"Player {last_arrived} was captured.")
+
+        if attacking_piece in self.pieces:
+            self.pieces.remove(attacking_piece)
+            print(f"Player {attacking_piece} was captured.")
+
+    def place_piece_with_tail(self, position_x, position_y, tail_x, tail_y, kind, player):
+        """
+        Place a piece of the given kind and player at (position_x, position_y), using (tail_x, tail_y) as the tail.
+        Validates that the move from tail to position is legal for the kind, and that the destination is unoccupied.
+        Marks the edge from tail to position as visited.
+        Prints an error if validation fails.
+        """
+        # Check if position is already occupied
+        for piece in self.pieces:
+            if piece.x == position_x and piece.y == position_y:
+                print("Error: position is already occupied.")
+                return
+
+        # Validate move from tail to position according to kind
+        dx = position_x - tail_x
+        dy = position_y - tail_y
+        if dx == 0 and dy == 0:
+            print("Error: tail and position are the same.")
+            return
+
+        kind_lower = kind.lower()
+        if kind_lower == "orthogonal":
+            if not ((abs(dx) == 1 and dy == 0) or (dx == 0 and abs(dy) == 1)):
+                print("Error: invalid orthogonal move from tail to position.")
+                return
+        elif kind_lower == "diagonal":
+            if not (abs(dx) == 1 and abs(dy) == 1):
+                print("Error: invalid diagonal move from tail to position.")
+                return
+        else:
+            print("Error: unknown piece kind.")
+            return
+
+        # Create the piece at the position
+        piece = Piece(kind, position_x, position_y, player)
+        self.move_counter += 1
+        piece.arrival_order = self.move_counter
+        self.pieces.append(piece)
+        # Mark edge as visited
+        self.add_visited_edge((tail_x, tail_y), (position_x, position_y))
+
     def print_game_state(self):
         # Print vertices z grid
         print("Vertices (z grid):")
-        for i in range(self.board.size):
+        for y in range(self.board.size):
             row = []
-            for j in range(self.board.size):
-                val = self.board.z[i][j]
+            for x in range(self.board.size):
+                val = self.board.z[y][x]
                 if val == 1:
                     row.append("+")
                 elif val == -1:
@@ -130,14 +259,14 @@ class GameState:
         print()
         # Print cells grid
         print("Cells (towers: o, bunkers: v, lakes: x, empty: .):")
-        for i in range(self.board.size - 1):
+        for y in range(self.board.size - 1):
             row = []
-            for j in range(self.board.size - 1):
-                if self.board.towers[i][j]:
+            for x in range(self.board.size - 1):
+                if self.board.towers[y][x]:
                     cell = "o"
-                elif self.board.bunkers[i][j]:
+                elif self.board.bunkers[y][x]:
                     cell = "v"
-                elif self.board.lakes[i][j]:
+                elif self.board.lakes[y][x]:
                     cell = "x"
                 else:
                     cell = "."
@@ -168,6 +297,7 @@ class Piece:
         self.x = x
         self.y = y
         self.player = player # Player 1 or Player 2
+        self.arrival_order = 0  # will be updated by GameState when placed or moved
 
     def move(self, new_x, new_y, game_state):
 
@@ -179,6 +309,9 @@ class Piece:
         if abs(dx) > 1 or abs(dy) > 1:
             print("Invalid move: only one tile at a time i allowed")
             return
+        
+        if dx == 0 and dy == 0:
+            print("Invalid move distance: same position")
         
         # Orthogonal can move either vertically or horizontally by one edge (one manhattan distance...)
         if self.kind == "orthogonal" and not ((abs(dx) == 1 and dy == 0) or (dx == 0 and abs(dy) == 1)):
@@ -199,38 +332,267 @@ class Piece:
         self.x, self.y = new_x, new_y
         game_state.add_visited_edge(start, end)
 
-        ### TODO ###
-        # implement the logic that if two pieces occupy the same edge, then the last piece that arrived is killed.
-        # logically even the same piece that arrived will die because it will be killed by the one that remains.
-        # In this case the turn is still of the one who did not attack.
+        # Update arrival order
+        game_state.move_counter += 1
+        self.arrival_order = game_state.move_counter
+
+        # Resolve conflict
+        game_state.resolve_vertex_conflict((new_x, new_y), self)
     
-    def shoot(new_x, new_y):
-        ...
+    def can_shoot(self, target_x, target_y, game_state):
+        """
+        Returns True if a shoot from self.x, self.y to target_x,target_y
+        is legal according to z rules and piece type, AND there is an enemy piece at the target.
+        Does NOT execute the shoot.
+        """
+        # First, check if an enemy piece exists at (target_x, target_y)
+        enemy_at_target = any(
+            p.x == target_x and p.y == target_y and p.player != self.player
+            for p in game_state.pieces
+        )
+        if not enemy_at_target:
+            return False
+
+        dx = target_x - self.x
+        dy = target_y - self.y
+
+        if dx == 0 and dy == 0:
+            return False  # same position
+
+        # Direction rules
+        if self.kind == "diagonal" and not (dx == 0 or dy == 0):
+            return False
+        if self.kind == "orthogonal" and abs(dx) != abs(dy):
+            return False
+
+        # Normalize direction
+        step_x = 0 if dx == 0 else dx // abs(dx)
+        step_y = 0 if dy == 0 else dy // abs(dy)
+
+        current_x, current_y = self.x, self.y
+        z_start = game_state.board.z[self.x][self.y]
+        z_end = game_state.board.z[target_x][target_y]
+
+        while (current_x, current_y) != (target_x, target_y):
+            current_x += step_x
+            current_y += step_y
+            z_mid = game_state.board.z[current_x][current_y]
+
+            # z rules
+            if z_start == 1 and z_end == 1:
+                continue
+            elif z_start == -1 and z_end == -1:
+                if z_mid != -1:
+                    print("Failed shooting attempt (-1->-1)")
+                    return False
+            elif z_start == 0 and z_end == 0:
+                if z_mid not in (0, -1):
+                    print("Failed shooting attempt (0->0)")
+                    return False
+            elif z_start == 1 and z_end == 0:
+                if z_mid not in (0, -1):
+                    print("Failed shooting attempt (1->0)")
+                    return False
+            elif z_start == 0 and z_end == 1:
+                if z_mid not in (0, -1):
+                    print("Failed shooting attempt (0->1)")
+                    return False
+            else:
+                print("Failed shooting attempt (-1 -> 0, 0->-1, 1->-1, -1->1)")
+                return False
+
+        return True
+
+    def shoot(self, new_x, new_y, game_state):
+        """
+        Executes the shot, if it can.
+        """
+        if not self.can_shoot(new_x, new_y, game_state):
+            print("Invalid shoot action.")
+            return
+
+        start = (self.x, self.y)
+        end = (new_x, new_y)
+
+        dx = new_x - self.x
+        dy = new_y - self.y
+
+        # Normalize direction
+        step_x = 0 if dx == 0 else dx // abs(dx)
+        step_y = 0 if dy == 0 else dy // abs(dy)
+
+        current_x, current_y = self.x, self.y
+
+        path_vertices = []
+
+        # Traverse path (excluding start, including end)
+        while (current_x, current_y) != (new_x, new_y):
+            next_x = current_x + step_x
+            next_y = current_y + step_y
+
+            path_vertices.append((next_x, next_y)) ###  Possibile ottimizzazione qua
+            current_x, current_y = next_x, next_y
+
+        # Mark edges as visited after validation 
+        current_x, current_y = start
+        for vx, vy in path_vertices:
+            game_state.add_visited_edge(
+                (current_x, current_y),
+                (vx, vy)
+            )
+            current_x, current_y = vx, vy
+
+        # Move piece
+        self.x = new_x
+        self.y = new_y
+
+        game_state.move_counter += 1
+        self.arrival_order = game_state.move_counter
+
+        game_state.resolve_vertex_conflict((new_x, new_y), self)
+
+    def has_legal_move_or_shoot(self, game_state):
+        """
+        Returns True if this piece has at least one legal move or shoot.
+        Only considers shoot targets where enemy pieces are present.
+        """
+        directions_orthogonal = [(1,0), (-1,0), (0,1), (0,-1)]
+        directions_diagonal = [(1,1), (1,-1), (-1,1), (-1,-1)]
+
+        # Check possible moves (one step)
+        if self.kind.lower() == "orthogonal":
+            moves = directions_orthogonal
+        elif self.kind.lower() == "diagonal":
+            moves = directions_diagonal
+        else:
+            moves = []
+
+        for dx, dy in moves:
+            new_x = self.x + dx
+            new_y = self.y + dy
+            # Check bounds
+            if 0 <= new_x < game_state.board.size and 0 <= new_y < game_state.board.size:
+                start = (self.x, self.y)
+                end = (new_x, new_y)
+                if not game_state.edge_visited(start, end):
+                    return True
+
+        # Check possible shoots (only at enemy piece locations)
+        for other in game_state.pieces:
+            if other.player == self.player:
+                continue
+            if (other.x, other.y) == (self.x, self.y):
+                continue
+            if self.can_shoot(other.x, other.y, game_state):
+                return True
+        return False
 
 
 if __name__ == "__main__":
-    board = Board(5)
-    board.place_tower(1, 1)
-    board.place_tower(1, 1)
-    board.place_bunker(0,1)
+    # Simple board setup
+    board = Board(9)
+    # Note: Board placement methods take (x, y) as user input, and internally use [y][x].
+    board.place_bunker(1, 1)
+    board.place_bunker(2, 2)
+    board.place_bunker(0, 1)
     board.place_lake(0, 2)
-    board.print_board()
+    board.place_tower(1, 6)
+    board.place_tower(6, 2)
+    board.place_bunker(0, 4)
+    board.place_lake(4, 2)
 
-    # Demonstration of GameState and print_game_state
-    game_state = GameState(5)
-    # Copy board state to game_state.board for demonstration
-    game_state.board = board
+    game_state = GameState(board)
 
-    # Add some pieces
-    p1 = Piece("Diagonal", 1, 1, 1)
-    p2 = Piece("Orthogonal", 2, 2, 2)
-    game_state.pieces.append(p1)
-    game_state.pieces.append(p2)
+    # Place starting pieces for both players using place_piece_with_tail
+    # Player 1: Diagonal at (1,1) with tail (0,0)
+    game_state.place_piece_with_tail(1, 1, 0, 0, "diagonal", 1)
+    # Player 2: Orthogonal at (3,4) with tail (4,4)
+    game_state.place_piece_with_tail(3, 3, 3, 4, "orthogonal", 2)
 
-    # Mark some edges visited
-    game_state.add_visited_edge((1, 1), (1, 2))
-    game_state.add_visited_edge((2, 2), (3, 2))
-
-    # Print the complete game state
-    game_state.print_game_state()
-    
+    # Main game loop
+    current_player = 2
+    while True:
+        print("="*40)
+        print(f"Player {current_player}'s turn")
+        game_state.print_game_state()
+        # List player's pieces
+        player_pieces = [piece for piece in game_state.pieces if piece.player == current_player]
+        if not player_pieces:
+            print(f"Player {current_player} has no pieces left! Game over.")
+            print(f"Player {3 - current_player} wins!")
+            break
+        # Check if any piece has legal move or shoot
+        can_act = any(piece.has_legal_move_or_shoot(game_state) for piece in player_pieces)
+        if not can_act:
+            print(f"Player {current_player} has no legal moves or shoots! Game over.")
+            print(f"Player {3 - current_player} wins!")
+            break
+        # Show pieces
+        print("Your pieces:")
+        for idx, piece in enumerate(player_pieces):
+            print(f"{idx}: {piece.kind} at ({piece.x}, {piece.y})")
+        # Retry loop for the player's turn
+        while True:
+            # Choose piece
+            while True:
+                try:
+                    piece_idx = int(input("Select a piece by index: "))
+                    if 0 <= piece_idx < len(player_pieces):
+                        selected_piece = player_pieces[piece_idx]
+                        break
+                    else:
+                        print("Invalid index.")
+                except Exception:
+                    print("Please enter a valid integer index.")
+            # Choose action
+            while True:
+                action = input("Action? (move/shoot): ").strip().lower()
+                if action in ("move", "shoot"):
+                    break
+                else:
+                    print("Type 'move' or 'shoot'.")
+            # Input target coordinates
+            while True:
+                try:
+                    target = input("Target coordinates (x y): ").strip().split()
+                    if len(target) != 2:
+                        print("Enter two integers separated by space.")
+                        continue
+                    tx, ty = int(target[0]), int(target[1])
+                    if 0 <= tx < game_state.board.size and 0 <= ty < game_state.board.size:
+                        break
+                    else:
+                        print(f"Coordinates must be between 0 and {game_state.board.size - 1}.")
+                except Exception:
+                    print("Invalid input. Try again.")
+            # Perform the action, but only switch turn if the action is successful
+            action_success = False
+            if action == "move":
+                print(f"Player {current_player} tries to move {selected_piece.kind} from ({selected_piece.x}, {selected_piece.y}) to ({tx}, {ty})")
+                prev_pos = (selected_piece.x, selected_piece.y)
+                prev_edges = set(game_state.visited_edges)
+                selected_piece.move(tx, ty, game_state)
+                # Check if piece position or visited_edges changed
+                if (selected_piece.x, selected_piece.y) != prev_pos or game_state.visited_edges != prev_edges:
+                    action_success = True
+                else:
+                    print("Move failed or invalid. Try again.")
+            else:
+                print(f"Player {current_player} tries to shoot {selected_piece.kind} from ({selected_piece.x}, {selected_piece.y}) to ({tx}, {ty})")
+                prev_pos = (selected_piece.x, selected_piece.y)
+                prev_edges = set(game_state.visited_edges)
+                selected_piece.shoot(tx, ty, game_state)
+                # Check if piece moved or visited_edges changed
+                if (selected_piece.x, selected_piece.y) != prev_pos or game_state.visited_edges != prev_edges:
+                    action_success = True
+                else:
+                    print("Shoot failed or invalid. Try again.")
+            # Print current board state for debugging
+            print("Current board state after action attempt:")
+            game_state.print_game_state()
+            # Only break (and switch player) if action succeeded
+            if action_success:
+                break
+        # Remove any dead pieces (already handled in conflict resolution)
+        # Switch player
+        current_player = 2 if current_player == 1 else 1
