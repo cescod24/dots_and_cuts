@@ -490,24 +490,20 @@ class Piece:
 
 if __name__ == "__main__":
     # Simple board setup
-    board = Board(9)
+    board = Board(5)
     # Note: Board placement methods take (x, y) as user input, and internally use [y][x].
-    board.place_bunker(1, 1)
-    board.place_bunker(2, 2)
-    board.place_bunker(0, 1)
-    board.place_lake(0, 2)
-    board.place_tower(1, 6)
-    board.place_tower(6, 2)
-    board.place_bunker(0, 4)
-    board.place_lake(4, 2)
+    
+    board.place_lake(1, 2)
 
     game_state = GameState(board)
 
     # Place starting pieces for both players using place_piece_with_tail
-    # Player 1: Diagonal at (1,1) with tail (0,0)
-    game_state.place_piece_with_tail(1, 1, 0, 0, "diagonal", 1)
-    # Player 2: Orthogonal at (3,4) with tail (4,4)
-    game_state.place_piece_with_tail(3, 3, 3, 4, "orthogonal", 2)
+    # Player 2: Diagonal at (1,1) with tail (0,0)
+    game_state.place_piece_with_tail(1, 1, 0, 0, "diagonal", 2)
+    game_state.place_piece_with_tail(2, 1, 0, 0, "diagonal", 2)
+    # Player 1: Orthogonal at (3,4) with tail (4,4)
+    game_state.place_piece_with_tail(3, 3, 4, 4, "diagonal", 1)
+    game_state.place_piece_with_tail(1, 4, 0, 4, "orthogonal", 1)
 
     # Main game loop
     current_player = 2
@@ -527,12 +523,11 @@ if __name__ == "__main__":
             print(f"Player {current_player} has no legal moves or shoots! Game over.")
             print(f"Player {3 - current_player} wins!")
             break
-        # Show pieces
-        print("Your pieces:")
-        for idx, piece in enumerate(player_pieces):
-            print(f"{idx}: {piece.kind} at ({piece.x}, {piece.y})")
         # Retry loop for the player's turn
         while True:
+            print("Your pieces:")
+            for idx, piece in enumerate(player_pieces):
+                print(f"{idx}: {piece.kind} at ({piece.x}, {piece.y})")
             # Choose piece
             while True:
                 try:
@@ -577,6 +572,9 @@ if __name__ == "__main__":
                     action_success = True
                 else:
                     print("Move failed or invalid. Try again.")
+                    print("Your pieces:")
+                    for idx, piece in enumerate(player_pieces):
+                        print(f"{idx}: {piece.kind} at ({piece.x}, {piece.y})")
             else:
                 print(f"Player {current_player} tries to shoot {selected_piece.kind} from ({selected_piece.x}, {selected_piece.y}) to ({tx}, {ty})")
                 prev_pos = (selected_piece.x, selected_piece.y)
@@ -587,6 +585,9 @@ if __name__ == "__main__":
                     action_success = True
                 else:
                     print("Shoot failed or invalid. Try again.")
+                    print("Your pieces:")
+                    for idx, piece in enumerate(player_pieces):
+                        print(f"{idx}: {piece.kind} at ({piece.x}, {piece.y})")
             # Print current board state for debugging
             print("Current board state after action attempt:")
             game_state.print_game_state()
@@ -596,3 +597,11 @@ if __name__ == "__main__":
         # Remove any dead pieces (already handled in conflict resolution)
         # Switch player
         current_player = 2 if current_player == 1 else 1
+
+
+
+
+
+########### TODO ###############
+# controllare che il pezzo non venga posizionato fuori dalla board (anche la tail)
+# permettere più pezzi dello stesso player nello stesso vertice, con tail diverse
