@@ -61,7 +61,7 @@ class Board:
         self.bunkers[y][x] = True
         self.recompute_z()
 
-    def place_lake(self, x, y, game_state=None):
+    def place_lake(self, x, y):
         """
         Place a lake at (x, y) as provided by user.
         Internally, access self.lakes as [y][x].
@@ -164,7 +164,7 @@ class GameState:
     def resolve_vertex_conflict(self, vertex, attacking_piece):
         """
         Handles combat resolution on a vertex.
-
+        Returns a list of pieces to be removed (but does not remove them).
         Rules:
         - If exactly 1 opponent is present → standard 1v1:
           the opponent dies and the attacker survives.
@@ -172,7 +172,6 @@ class GameState:
           the last arrived opponent dies and the attacker also dies.
         """
         x, y = vertex
-
         # Find opponent pieces on the same vertex
         opponents = [
             p for p in self.pieces
@@ -180,26 +179,28 @@ class GameState:
         ]
 
         if len(opponents) == 0:
-            return  # No combat
+            return []  # No combat, nothing to remove
 
         # 1v1 case
         if len(opponents) == 1:
             opponent = opponents[0]
-            if opponent in self.pieces:
-                self.pieces.remove(opponent)
-                print(f"Player {opponent} was captured.")
-            return  # attacker survives
+            return [opponent]  # attacker survives, opponent dies
 
         # Collapse case: 2 or more opponents
         last_arrived = max(opponents, key=lambda p: p.arrival_order)
+        to_remove = []
+        to_remove.append(last_arrived)
+        to_remove.append(attacking_piece)
+        return to_remove
 
-        if last_arrived in self.pieces:
-            self.pieces.remove(last_arrived)
-            print(f"Player {last_arrived} was captured.")
-
-        if attacking_piece in self.pieces:
-            self.pieces.remove(attacking_piece)
-            print(f"Player {attacking_piece} was captured.")
+    def apply_conflict_resolution(self, removed_pieces):
+        """
+        Actually removes the pieces from the board and prints capture messages.
+        """
+        for piece in removed_pieces:
+            if piece in self.pieces:
+                self.pieces.remove(piece)
+                print(f"Player {piece} was captured.")
 
     def place_piece_with_tail(self, position_x, position_y, tail_x, tail_y, kind, player):
         """
@@ -208,18 +209,22 @@ class GameState:
         Marks the edge from tail to position as visited.
         Prints an error if validation fails.
         """
-        # Check if position is already occupied
-        for piece in self.pieces:
-            if piece.x == position_x and piece.y == position_y:
-                print("Error: position is already occupied.")
-                return
+        # Check that both the tail and the position are within board bounds
+        if not (0 <= position_x < self.board.size and 0 <= position_y < self.board.size):
+            print("Error: position out of bounds.")
+            return
+        if not (0 <= tail_x < self.board.size and 0 <= tail_y < self.board.size):
+            print("Error: tail out of bounds.")
+            return
+
+        # Ensure that a piece's tail and position are not exactly the same
+        if position_x == tail_x and position_y == tail_y:
+            print("Error: tail and position cannot be exactly the same.")
+            return
 
         # Validate move from tail to position according to kind
         dx = position_x - tail_x
         dy = position_y - tail_y
-        if dx == 0 and dy == 0:
-            print("Error: tail and position are the same.")
-            return
 
         kind_lower = kind.lower()
         if kind_lower == "orthogonal":
@@ -290,6 +295,24 @@ class GameState:
                 print(f"{edge[0]} <-> {edge[1]}")
         print()
 
+
+    def is_game_over(self):
+        """
+        Returns (True, winner) if the game is over, (False, None) otherwise.
+        Game is over if a player has no pieces left or no legal move/shoot.
+        Winner is the other player (1 or 2).
+        """
+        for player in [1, 2]:
+            player_pieces = [p for p in self.pieces if p.player == player]
+            if not player_pieces:
+                # This player has no pieces, so other player wins
+                return True, 2 if player == 1 else 1
+            can_act = any(p.has_legal_move_or_shoot(self) for p in player_pieces)
+            if not can_act:
+                # This player cannot act, so other player wins
+                return True, 2 if player == 1 else 1
+        return False, None
+
 class Piece:
 
     def __init__(self, kind, x, y, player):
@@ -299,33 +322,52 @@ class Piece:
         self.player = player # Player 1 or Player 2
         self.arrival_order = 0  # will be updated by GameState when placed or moved
 
-    def move(self, new_x, new_y, game_state):
+    def can_move(self, new_x, new_y, game_state):
+        """
+        Returns True if moving to (new_x, new_y) is legal.
+        Checks:
+        - Inside board bounds
+        - Move distance is exactly one step
+        - Direction matches piece kind
+        - Edge not already visited
+        """
+        # Check bounds
+        if not (0 <= new_x < game_state.board.size and 0 <= new_y < game_state.board.size):
+            return False
 
+        dx = new_x - self.x
+        dy = new_y - self.y
+
+        # Must move exactly one step
+        if abs(dx) > 1 or abs(dy) > 1:
+            return False
+        if dx == 0 and dy == 0:
+            return False
+
+        # Direction rules
+        if self.kind == "orthogonal":
+            if not ((abs(dx) == 1 and dy == 0) or (dx == 0 and abs(dy) == 1)):
+                return False
+        elif self.kind == "diagonal":
+            if not (abs(dx) == 1 and abs(dy) == 1):
+                return False
+        else:
+            return False
+
+        # Edge must not be visited
+        if game_state.edge_visited((self.x, self.y), (new_x, new_y)):
+            return False
+
+        return True
+
+    def move(self, new_x, new_y, game_state):
         start = (self.x, self.y)
         end = (new_x, new_y)
         dx = end[0] - start[0]
         dy = end[1] - start[1]
 
-        if abs(dx) > 1 or abs(dy) > 1:
-            print("Invalid move: only one tile at a time i allowed")
-            return
-        
-        if dx == 0 and dy == 0:
-            print("Invalid move distance: same position")
-        
-        # Orthogonal can move either vertically or horizontally by one edge (one manhattan distance...)
-        if self.kind == "orthogonal" and not ((abs(dx) == 1 and dy == 0) or (dx == 0 and abs(dy) == 1)):
-            print("Invalid orthogonal move")
-            return
-        
-        # Diagonal can move diagonally (two manhattan distances)
-        if self.kind == "diagonal" and not (abs(dx) == 1 and abs(dy) == 1):
-            print("Invalid diagonal move")
-            return
-
-        # Check if edge already visited
-        if game_state.edge_visited(start, end):
-            print("Move not allowed: edge already visited.")
+        if not self.can_move(new_x, new_y, game_state):
+            print("Invalid move.")
             return
 
         # Update position and edges
@@ -337,7 +379,8 @@ class Piece:
         self.arrival_order = game_state.move_counter
 
         # Resolve conflict
-        game_state.resolve_vertex_conflict((new_x, new_y), self)
+        removed_pieces = game_state.resolve_vertex_conflict((new_x, new_y), self)
+        game_state.apply_conflict_resolution(removed_pieces)
     
     def can_shoot(self, target_x, target_y, game_state):
         """
@@ -449,7 +492,8 @@ class Piece:
         game_state.move_counter += 1
         self.arrival_order = game_state.move_counter
 
-        game_state.resolve_vertex_conflict((new_x, new_y), self)
+        removed_pieces = game_state.resolve_vertex_conflict((new_x, new_y), self)
+        game_state.apply_conflict_resolution(removed_pieces)
 
     def has_legal_move_or_shoot(self, game_state):
         """
@@ -488,40 +532,67 @@ class Piece:
         return False
 
 
-if __name__ == "__main__":
-    # Simple board setup
-    board = Board(5)
-    # Note: Board placement methods take (x, y) as user input, and internally use [y][x].
-    
-    board.place_lake(1, 2)
+import random
 
+def setup_standard_game():
+    """
+    Create a 9x9 board, place a random number of towers (6-10), bunkers (6-10), and lakes (3-5) in unique positions (no overlaps),
+    with lakes never in the corners. Keeps player pieces in fixed positions.
+    Returns a ready-to-use GameState.
+    """
+    board = Board(9)
+    size = 9
+    cell_coords = [(x, y) for x in range(size-1) for y in range(size-1)]
+    # Corners for lakes exclusion
+    corners = {(0,0), (0,size-2), (size-2,0), (size-2,size-2)}
+    # Random counts
+    n_towers = random.randint(5, 10)
+    n_bunkers = random.randint(10, 15)
+    n_lakes = random.randint(0, 1)
+    # First, choose lake positions (no corners)
+    possible_lake_cells = [pos for pos in cell_coords if pos not in corners]
+    lake_positions = set(random.sample(possible_lake_cells, n_lakes))
+    # Now, choose tower positions, avoiding lakes
+    remaining_for_towers = [pos for pos in cell_coords if pos not in lake_positions]
+    tower_positions = set(random.sample(remaining_for_towers, n_towers))
+    # Now, choose bunker positions, avoiding both lakes and towers
+    remaining_for_bunkers = [pos for pos in cell_coords if pos not in lake_positions and pos not in tower_positions]
+    bunker_positions = set(random.sample(remaining_for_bunkers, n_bunkers))
+    # Place on board
+    for x, y in tower_positions:
+        board.place_tower(x, y)
+    for x, y in bunker_positions:
+        board.place_bunker(x, y)
+    for x, y in lake_positions:
+        board.place_lake(x, y)
+    # Create GameState with the board
     game_state = GameState(board)
+    # Place 1 orthogonal and 1 diagonal piece for each player (fixed positions)
+    # Player 1:
+    game_state.place_piece_with_tail(8, 7, 8, 8, "orthogonal", 1)
+    game_state.place_piece_with_tail(1, 7, 0, 8, "diagonal", 1)
+    # Player 2:
+    game_state.place_piece_with_tail(0, 1, 0, 0, "orthogonal", 2)
+    game_state.place_piece_with_tail(7, 1, 8, 0, "diagonal", 2)
+    return game_state
 
-    # Place starting pieces for both players using place_piece_with_tail
-    # Player 2: Diagonal at (1,1) with tail (0,0)
-    game_state.place_piece_with_tail(1, 1, 0, 0, "diagonal", 2)
-    game_state.place_piece_with_tail(2, 1, 0, 0, "diagonal", 2)
-    # Player 1: Orthogonal at (3,4) with tail (4,4)
-    game_state.place_piece_with_tail(3, 3, 4, 4, "diagonal", 1)
-    game_state.place_piece_with_tail(1, 4, 0, 4, "orthogonal", 1)
+
+if __name__ == "__main__":
+    # Standard board setup
+
+    game_state = setup_standard_game()
 
     # Main game loop
-    current_player = 2
+    current_player = 1
     while True:
         print("="*40)
         print(f"Player {current_player}'s turn")
         game_state.print_game_state()
         # List player's pieces
         player_pieces = [piece for piece in game_state.pieces if piece.player == current_player]
-        if not player_pieces:
-            print(f"Player {current_player} has no pieces left! Game over.")
-            print(f"Player {3 - current_player} wins!")
-            break
-        # Check if any piece has legal move or shoot
-        can_act = any(piece.has_legal_move_or_shoot(game_state) for piece in player_pieces)
-        if not can_act:
-            print(f"Player {current_player} has no legal moves or shoots! Game over.")
-            print(f"Player {3 - current_player} wins!")
+        game_over, winner = game_state.is_game_over()
+        if game_over:
+            print(f"Game over! Player {winner} wins!")
             break
         # Retry loop for the player's turn
         while True:
@@ -602,6 +673,9 @@ if __name__ == "__main__":
 
 
 
+
+
 ########### TODO ###############
-# controllare che il pezzo non venga posizionato fuori dalla board (anche la tail)
-# permettere più pezzi dello stesso player nello stesso vertice, con tail diverse
+# 
+# permettere più pezzi dello stesso player nello stesso vertice, con tail diverse,
+# ora si puo ancora fare tail e pos uguali... da risolverre

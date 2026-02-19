@@ -1,0 +1,37 @@
+Player 1's turn
+Vertices (z grid):
+. . . . . . . . .
+. . . . - - . . .
+. . + + - - + + .
+. . + + . . + + .
+. - - . . . . - -
+. - - . . . . - -
+. . + + . . + + .
+. . + + - - + + .
+. . . . - - . . .
+
+Cells (towers: o, bunkers: v, lakes: x, empty: .):
+x . . . . . . .
+. . . . v . . .
+. . o . . . o .
+. . . . . . . .
+. v . . x . . v
+. . . . . . . .
+. . o . . . o .
+. . . . v . . .
+
+Pieces on board:
+Player 1 orthogonal at (8, 7)
+Player 1 diagonal at (1, 7)
+Player 2 orthogonal at (0, 1)
+Player 2 diagonal at (7, 1)
+
+Random strategy results over 100 games: {'winner_counts': {1: 41, 2: 59}, 'average_moves': 38.08, 'max_moves': 90, 'average_depth': 38.08, 'draws': 0, 'average_available_moves_per_turn': 3.742909663865546}
+Greedy strategy results over 100 games: {'winner_counts': {1: 100, 2: 0}, 'average_moves': 25, 'max_moves': 25, 'average_depth': 25, 'draws': 0, 'average_available_moves_per_turn': 3.68}
+Greedy vs Random strategy results over 100 games: {'winner_counts': {1: 76, 2: 24}, 'average_moves': 24.34, 'max_moves': 64, 'average_depth': 24.34, 'draws': 0, 'average_available_moves_per_turn': 4.077649958915366}
+Comparison:
+Greedy vs Random - Greedy wins: 76
+Greedy vs Random - Random wins: 24
+
+c'è qualcosa che non va decisamente... con il greedy.
+------------------------------------------------------------
