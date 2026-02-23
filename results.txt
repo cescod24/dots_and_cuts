@@ -35,3 +35,22 @@ Greedy vs Random - Random wins: 24
 
 c'è qualcosa che non va decisamente... con il greedy.
 ------------------------------------------------------------
+
+Random strategy results over 100 games: {'winner_counts': {1: 54, 2: 46}, 'average_moves': 38.13, 'max_moves': 88, 'average_depth': 38.13, 'draws': 0, 'average_available_moves_per_turn': 3.802255441909258}
+Greedy strategy results over 100 games: {'winner_counts': {1: 50, 2: 50}, 'average_moves': 27.87, 'max_moves': 65, 'average_depth': 27.87, 'draws': 0, 'average_available_moves_per_turn': 4.177610333692142}
+Greedy vs Random strategy results over 100 games: {'winner_counts': {1: 75, 2: 25}, 'average_moves': 28.94, 'max_moves': 87, 'average_depth': 28.94, 'draws': 0, 'average_available_moves_per_turn': 4.140635798203179}
+Comparison:
+Greedy vs Random - Greedy wins: 75
+Greedy vs Random - Random wins: 25
+
+mappa: 5-10 torri random, 10-15 bunker random, 0-1 laghi random
+Risolto il greedy (50-50), il greedy batte il random, giustamente
+------------------------------------------------------------
+
+Minimax (depth=4) vs Greedy strategy results over 100 games: {'winner_counts': {1: 49, 2: 51}, 'average_moves': 74.74, 'max_moves': 195, 'average_depth': 74.74, 'draws': 0, 'average_available_moves_per_turn': 3.766791544019267}
+python analysis.py  122.59s user 0.95s system 99% cpu 2:03.99 total
+
+minimax con regole: 0.1 punti ogni direzione possibile, 1 punto per pezzo, 1 punto per possibilità di
+shooting. Vedo che pareggia con il greedy, quindi la direzione possibile dà tanti punti quanto la possibilità di
+sparare (greedy). Però ora la possibilità di sparare in minimax è stupida perché è sempre 0
+__________________________________________________________________

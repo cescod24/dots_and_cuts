@@ -300,7 +300,7 @@ class GameState:
         """
         Returns (True, winner) if the game is over, (False, None) otherwise.
         Game is over if a player has no pieces left or no legal move/shoot.
-        Winner is the other player (1 or 2).
+        Winner is the other player
         """
         for player in [1, 2]:
             player_pieces = [p for p in self.pieces if p.player == player]
