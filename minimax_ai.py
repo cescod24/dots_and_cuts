@@ -1,6 +1,7 @@
 from dotscuts import GameState
 from ai_core import Action, generate_legal_actions, execute_action
 import copy
+import random
 
 def generate_all_actions(game_state: GameState, current_player: int) -> list:
     """
@@ -28,17 +29,18 @@ def evaluate_position(game_state: GameState, current_player: int) -> float:
     enemy_player = 2 if current_player == 1 else 1
     enemy_actions = generate_all_actions(game_state, current_player=enemy_player)
 
-    # 1 piece = 1 point
-    pieces_difference = 1.5 * (len(player_pieces) - len(enemy_pieces))
+    # 1 piece = 1 point.            
+    pieces_difference = 2 * (len(player_pieces) - len(enemy_pieces))
     score += pieces_difference
 
-    # 1 available move = 0.1 point
+    # 1 available move = 0.1 point 
     moves_difference = len(player_actions) - len(enemy_actions)
     score += 0.25 * moves_difference
 
     # 1 shooting opportunity = 1 point
     shooting_opportunities = [a for a in player_actions if a.action_type == "shoot"] 
-    score += 5 * len(shooting_opportunities)
+    getting_shoot_opportunities = [a for a in enemy_actions if a.action_type == "shoot"] 
+    score += 3 * (len(shooting_opportunities) - len(getting_shoot_opportunities))
 
     return score
 
@@ -78,10 +80,10 @@ def minimax(game_state: GameState, depth: int, alpha: float, beta: float, maximi
         return max_eval
     
     if not maximizing_player:
-        opponent_actions = generate_all_actions(game_state, opponent)
+        player_actions = generate_all_actions(game_state, player)
         min_eval = float("inf")
 
-        for action in opponent_actions:
+        for action in player_actions:
             clone_state = copy.deepcopy(game_state)
             execute_action(clone_state, action)
             score = minimax(clone_state, depth-1, alpha, beta, True, root_player)
@@ -98,15 +100,17 @@ def minimax_best_move(game_state: GameState, player: int, depth: int) -> Action:
     """
     actions = generate_all_actions(game_state, player)
     best_score = float("-inf")
-    best_action = None
+    best_actions = []
     for action in actions:
         clone_state = copy.deepcopy(game_state)
         execute_action(clone_state, action)
         score = minimax(clone_state, depth-1, alpha=float("-inf"), beta=float("inf"), maximizing_player=False, root_player=player)
-        if score > best_score or best_action is None:
+        if score > best_score:
             best_score = score
-            best_action = action
-    return best_action
+            best_actions = [action]
+        elif score == best_score:
+            best_actions.append(action)
+    return random.choice(best_actions) if best_actions else None
 
 
 if __name__ == "__main__":

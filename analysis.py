@@ -385,10 +385,10 @@ if __name__ == "__main__":
 
     game_state = setup_standard_game()
 
-    starting_player = 2
+    starting_player = 1
 
-    num_simulations = 100
-    WRITE_RESULTS_TO_FILE = True
+    num_simulations = 600
+    WRITE_RESULTS_TO_FILE = False
     RESULTS_FILE_NAME = "results.txt"
     minimax_depth = 8
     block_print()
