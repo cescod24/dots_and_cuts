@@ -54,66 +54,20 @@ minimax con regole: 0.1 punti ogni direzione possibile, 1 punto per pezzo, 1 pun
 shooting. Vedo che pareggia con il greedy, quindi la direzione possibile dà tanti punti quanto la possibilità di
 sparare (greedy). Però ora la possibilità di sparare in minimax è stupida perché è sempre 0
 __________________________________________________________________
-Minimax (depth=1) vs Greedy strategy results over 100 games: {'winner_counts': {1: 52, 2: 48}, 'average_moves': 70.44, 'max_moves': 166, 'average_depth': 70.44, 'draws': 0, 'average_available_moves_per_turn': 3.914395229982964}
-Comparison:
-------------------------------------------------------------
-Minimax (depth=1) vs Greedy strategy results over 1000 games: {'winner_counts': {1: 519, 2: 481}, 'average_moves': 74.037, 'max_moves': 219, 'average_depth': 74.037, 'draws': 0, 'average_available_moves_per_turn': 3.8722260491375935}
-Comparison:
-------------------------------------------------------------
-Minimax (depth=2) vs Greedy strategy results over 100 games: {'winner_counts': {1: 52, 2: 48}, 'average_moves': 74.96, 'max_moves': 179, 'average_depth': 74.96, 'draws': 0, 'average_available_moves_per_turn': 3.832310565635005}
-Comparison:
-------------------------------------------------------------
-Minimax (depth=3) vs Greedy strategy results over 100 games: {'winner_counts': {1: 58, 2: 42}, 'average_moves': 66.86, 'max_moves': 196, 'average_depth': 66.86, 'draws': 0, 'average_available_moves_per_turn': 3.8431049955130123}
-Comparison:
-------------------------------------------------------------
-Minimax (depth=2) vs Greedy strategy results over 100 games: {'winner_counts': {1: 49, 2: 51}, 'average_moves': 69.7, 'max_moves': 168, 'average_depth': 69.7, 'draws': 0, 'average_available_moves_per_turn': 3.974461979913917}
-Comparison:
-------------------------------------------------------------
-Minimax (depth=2) vs Greedy strategy results over 100 games: {'winner_counts': {1: 50, 2: 50}, 'average_moves': 73.36, 'max_moves': 170, 'average_depth': 73.36, 'draws': 0, 'average_available_moves_per_turn': 3.8672300981461287}
-Comparison:
-------------------------------------------------------------
-Minimax (depth=4) vs Greedy strategy results over 10 games: {'winner_counts': {1: 5, 2: 5}, 'average_moves': 69.1, 'max_moves': 130, 'average_depth': 69.1, 'draws': 0, 'average_available_moves_per_turn': 4.173661360347323}
-Comparison:
-------------------------------------------------------------
-Minimax (depth=4) vs Greedy strategy results over 10 games: {'winner_counts': {1: 9, 2: 1}, 'average_moves': 61.1, 'max_moves': 88, 'average_depth': 61.1, 'draws': 0, 'average_available_moves_per_turn': 3.8968903436988542}
-Comparison:
-------------------------------------------------------------
-Minimax (depth=4) vs Greedy strategy results over 10 games: {'winner_counts': {1: 4, 2: 6}, 'average_moves': 83.4, 'max_moves': 141, 'average_depth': 83.4, 'draws': 0, 'average_available_moves_per_turn': 3.6702637889688248}
-Comparison:
-------------------------------------------------------------
-Minimax (depth=4) vs Greedy strategy results over 10 games: {'winner_counts': {1: 5, 2: 5}, 'average_moves': 79.7, 'max_moves': 140, 'average_depth': 79.7, 'draws': 0, 'average_available_moves_per_turn': 3.958594730238394}
-Comparison:
-------------------------------------------------------------
-Minimax (depth=4) vs Greedy strategy results over 100 games: {'winner_counts': {1: 46, 2: 54}, 'average_moves': 74.11, 'max_moves': 181, 'average_depth': 74.11, 'draws': 0, 'average_available_moves_per_turn': 3.951018755903387}
-Comparison:
-------------------------------------------------------------
-Minimax (depth=8) vs Greedy strategy results over 50 games: {'winner_counts': {1: 26, 2: 24}, 'average_moves': 72.86, 'max_moves': 158, 'average_depth': 72.86, 'draws': 0, 'average_available_moves_per_turn': 3.97062860279989}
-Comparison:
-------------------------------------------------------------
-Minimax (depth=4) vs Greedy strategy results over 10 games: {'winner_counts': {1: 6, 2: 4}, 'average_moves': 61.9, 'max_moves': 97, 'average_depth': 61.9, 'draws': 0, 'average_available_moves_per_turn': 3.7835218093699514}
-Comparison:
-------------------------------------------------------------
-Minimax (depth=4) vs Greedy strategy results over 10 games: {'winner_counts': {1: 7, 2: 3}, 'average_moves': 68.3, 'max_moves': 146, 'average_depth': 68.3, 'draws': 0, 'average_available_moves_per_turn': 3.9062957540263543}
-Comparison:
-------------------------------------------------------------
-Minimax (depth=4) vs Greedy strategy results over 10 games: {'winner_counts': {1: 4, 2: 6}, 'average_moves': 58.8, 'max_moves': 112, 'average_depth': 58.8, 'draws': 0, 'average_available_moves_per_turn': 3.860544217687075}
-Comparison:
-------------------------------------------------------------
-Minimax (depth=4) vs Greedy strategy results over 50 games: {'winner_counts': {1: 27, 2: 23}, 'average_moves': 69.5, 'max_moves': 174, 'average_depth': 69.5, 'draws': 0, 'average_available_moves_per_turn': 3.8379856115107915}
-Comparison:
-------------------------------------------------------------
-Minimax (depth=4) vs Greedy strategy results over 50 games: {'winner_counts': {1: 37, 2: 13}, 'average_moves': 83.92, 'max_moves': 176, 'average_depth': 83.92, 'draws': 0, 'average_available_moves_per_turn': 3.988560533841754}
-Comparison:
-------------------------------------------------------------
-Minimax (depth=4) vs Greedy strategy results over 50 games: {'winner_counts': {1: 28, 2: 22}, 'average_moves': 76.66, 'max_moves': 188, 'average_depth': 76.66, 'draws': 0, 'average_available_moves_per_turn': 3.8332898512914166}
-Comparison:
-------------------------------------------------------------
-Minimax (depth=4) vs Greedy strategy results over 100 games: {'winner_counts': {1: 50, 2: 50}, 'average_moves': 76.32, 'max_moves': 182, 'average_depth': 76.32, 'draws': 0, 'average_available_moves_per_turn': 3.952830188679245}
-Comparison:
-------------------------------------------------------------
-Minimax (depth=4) vs Greedy strategy results over 10 games: {'winner_counts': {1: 6, 2: 4}, 'average_moves': 77.1, 'max_moves': 119, 'average_depth': 77.1, 'draws': 0, 'average_available_moves_per_turn': 4.06485084306096}
-Comparison:
-------------------------------------------------------------
-Minimax (depth=4) vs Greedy strategy results over 50 games: {'winner_counts': {1: 27, 2: 23}, 'average_moves': 73.96, 'max_moves': 164, 'average_depth': 73.96, 'draws': 0, 'average_available_moves_per_turn': 3.8180097349918873}
-Comparison:
-------------------------------------------------------------
+
+Minimax a depth 8 ha vinto 330 partite su 600... minimax a depth 10 ne ha vinte solo 49/100.
+Ci hanno messo oltre 8 ore (bottleneck su .deepcopy probabilmente) e decisamente c'è qualcosa che non va con evaluate.
+__________________________________________________________________
+
+Strat 2: trovare i pesi per il minimax trovando delle correlazioni con partite random
+
+Minimax (depth=4) vs Greedy strategy results over 300 games: 
+{'winner_counts': {1: 188, 2: 112}, 'average_moves': 41.81333333333333, 
+'max_moves': 105, 'average_depth': 41.81333333333333, 'draws': 0,
+'average_available_moves_per_turn': 4.296954719387755}
+
+ehmmm boh non so come interpretare. 
+
+Ho aggiunto SOLO l'undo delle mosse e cambia già così tanto???
+ora minimax è decisamente più forte di greedy
+__________________________________________________________________

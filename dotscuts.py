@@ -107,9 +107,54 @@ class GameState:
     def __init__(self, board):
         self.board = board
         self.pieces = []  # List to hold pieces
-        self.visited_edges = set() 
+        self.visited_edges = set()
         self.move_counter = 0  # global counter to track arrival order on vertices
+        self.history = []  # stack for undo functionality
         self.initialize_lake_edges()
+        
+    def undo_last_move(self):
+        """
+        Undo the last move (supports undo for Piece.move and Piece.shoot).
+        Restores piece position, arrival order, visited edge(s), and captured pieces.
+        """
+        if not self.history:
+            print("Nothing to undo.")
+            return
+
+        last = self.history.pop()
+
+        piece = last["piece"]
+        old_x, old_y = last["old_pos"]
+        old_arrival = last["old_arrival"]
+        removed_snapshot = last["removed"]
+
+        # Restore moving piece
+        piece.x = old_x
+        piece.y = old_y
+        piece.arrival_order = old_arrival
+
+        # Remove visited edges (move has single "edge", shoot has "edges")
+        if "edge" in last:
+            if last["edge"] in self.visited_edges:
+                self.visited_edges.remove(last["edge"])
+        if "edges" in last:
+            for e in last["edges"]:
+                if e in self.visited_edges:
+                    self.visited_edges.remove(e)
+
+        # Restore captured pieces
+        for p, x, y, arrival in removed_snapshot:
+            p.x = x
+            p.y = y
+            p.arrival_order = arrival
+            if p not in self.pieces:
+                self.pieces.append(p)
+
+        # Roll back move counter safely
+        self.move_counter = max(
+            [p.arrival_order for p in self.pieces],
+            default=0
+        )
 
     def initialize_lake_edges(self):
         """
@@ -363,12 +408,15 @@ class Piece:
     def move(self, new_x, new_y, game_state):
         start = (self.x, self.y)
         end = (new_x, new_y)
-        dx = end[0] - start[0]
-        dy = end[1] - start[1]
 
         if not self.can_move(new_x, new_y, game_state):
             print("Invalid move.")
             return
+
+        # Save state for undo
+        old_x, old_y = self.x, self.y
+        old_arrival = self.arrival_order
+        added_edge = tuple(sorted([start, end]))
 
         # Update position and edges
         self.x, self.y = new_x, new_y
@@ -378,9 +426,25 @@ class Piece:
         game_state.move_counter += 1
         self.arrival_order = game_state.move_counter
 
-        # Resolve conflict
+        # Resolve conflict (but capture removed pieces before applying)
         removed_pieces = game_state.resolve_vertex_conflict((new_x, new_y), self)
+
+        # Store removed pieces state for undo
+        removed_snapshot = []
+        for p in removed_pieces:
+            removed_snapshot.append((p, p.x, p.y, p.arrival_order))
+
+        # Apply removal
         game_state.apply_conflict_resolution(removed_pieces)
+
+        # Push to history
+        game_state.history.append({
+            "piece": self,
+            "old_pos": (old_x, old_y),
+            "old_arrival": old_arrival,
+            "edge": added_edge,
+            "removed": removed_snapshot
+        })
     
     def can_shoot(self, target_x, target_y, game_state):
         """
@@ -457,6 +521,11 @@ class Piece:
         start = (self.x, self.y)
         end = (new_x, new_y)
 
+        # Save state for undo
+        old_x, old_y = self.x, self.y
+        old_arrival = self.arrival_order
+        added_edges = []
+
         dx = new_x - self.x
         dy = new_y - self.y
 
@@ -465,24 +534,25 @@ class Piece:
         step_y = 0 if dy == 0 else dy // abs(dy)
 
         current_x, current_y = self.x, self.y
-
         path_vertices = []
 
         # Traverse path (excluding start, including end)
         while (current_x, current_y) != (new_x, new_y):
             next_x = current_x + step_x
             next_y = current_y + step_y
-
-            path_vertices.append((next_x, next_y)) ###  Possibile ottimizzazione qua
+            path_vertices.append((next_x, next_y))
             current_x, current_y = next_x, next_y
 
-        # Mark edges as visited after validation 
+        # Mark edges as visited and store ONLY newly added ones for undo
         current_x, current_y = start
         for vx, vy in path_vertices:
-            game_state.add_visited_edge(
-                (current_x, current_y),
-                (vx, vy)
-            )
+            edge = tuple(sorted([(current_x, current_y), (vx, vy)]))
+
+            # Only record the edge if it was not already visited
+            if edge not in game_state.visited_edges:
+                game_state.add_visited_edge((current_x, current_y), (vx, vy))
+                added_edges.append(edge)
+
             current_x, current_y = vx, vy
 
         # Move piece
@@ -492,8 +562,24 @@ class Piece:
         game_state.move_counter += 1
         self.arrival_order = game_state.move_counter
 
+        # Resolve conflict (capture removed pieces before applying)
         removed_pieces = game_state.resolve_vertex_conflict((new_x, new_y), self)
+
+        removed_snapshot = []
+        for p in removed_pieces:
+            removed_snapshot.append((p, p.x, p.y, p.arrival_order))
+
         game_state.apply_conflict_resolution(removed_pieces)
+
+        # Push to history
+        game_state.history.append({
+            "piece": self,
+            "old_pos": (old_x, old_y),
+            "old_arrival": old_arrival,
+            "edges": added_edges,
+            "removed": removed_snapshot,
+            "type": "shoot"
+        })
 
     def has_legal_move_or_shoot(self, game_state):
         """
@@ -580,7 +666,15 @@ def setup_standard_game():
 if __name__ == "__main__":
     # Standard board setup
 
-    game_state = setup_standard_game()
+    board = Board(5)
+    board.place_lake(3, 2)
+    game_state = GameState(board)
+    # Player 1:
+    game_state.place_piece_with_tail(0, 1, 0, 0, "orthogonal", 1)
+    game_state.place_piece_with_tail(3, 1, 4, 0, "diagonal", 1)
+    # Player 2:
+    game_state.place_piece_with_tail(0, 3, 0, 4, "orthogonal", 2)
+    game_state.place_piece_with_tail(3, 3, 4, 4, "diagonal", 2)
 
     # Main game loop
     current_player = 1
@@ -612,11 +706,19 @@ if __name__ == "__main__":
                     print("Please enter a valid integer index.")
             # Choose action
             while True:
-                action = input("Action? (move/shoot): ").strip().lower()
-                if action in ("move", "shoot"):
+                action = input("Action? (move/shoot/undo): ").strip().lower()
+                if action in ("move", "shoot", "undo"):
                     break
                 else:
-                    print("Type 'move' or 'shoot'.")
+                    print("Type 'move', 'shoot', or 'undo'.")
+            
+            # Handle undo immediately (do not switch player)
+            if action == "undo":
+                print("Undoing last action...")
+                game_state.undo_last_move()
+                print("Board after undo:")
+                game_state.print_game_state()
+                continue
             # Input target coordinates
             while True:
                 try:

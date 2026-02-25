@@ -1,6 +1,5 @@
 from dotscuts import GameState
 from ai_core import Action, generate_legal_actions, execute_action
-import copy
 import random
 
 def generate_all_actions(game_state: GameState, current_player: int) -> list:
@@ -69,9 +68,10 @@ def minimax(game_state: GameState, depth: int, alpha: float, beta: float, maximi
         max_eval = float("-inf")
 
         for action in player_actions:
-            clone_state = copy.deepcopy(game_state)
-            execute_action(clone_state, action)
-            score = minimax(clone_state, depth-1, alpha, beta, False, root_player)
+            execute_action(game_state, action)
+            score = minimax(game_state, depth-1, alpha, beta, False, root_player)
+            game_state.undo_last_move()
+
             max_eval = max(max_eval, score)
             alpha = max(alpha, max_eval)
             if alpha >= beta:
@@ -84,9 +84,10 @@ def minimax(game_state: GameState, depth: int, alpha: float, beta: float, maximi
         min_eval = float("inf")
 
         for action in player_actions:
-            clone_state = copy.deepcopy(game_state)
-            execute_action(clone_state, action)
-            score = minimax(clone_state, depth-1, alpha, beta, True, root_player)
+            execute_action(game_state, action)
+            score = minimax(game_state, depth-1, alpha, beta, True, root_player)
+            game_state.undo_last_move()
+
             min_eval = min(min_eval, score)
             beta = min(beta, min_eval)
             if beta <= alpha:
@@ -102,9 +103,10 @@ def minimax_best_move(game_state: GameState, player: int, depth: int) -> Action:
     best_score = float("-inf")
     best_actions = []
     for action in actions:
-        clone_state = copy.deepcopy(game_state)
-        execute_action(clone_state, action)
-        score = minimax(clone_state, depth-1, alpha=float("-inf"), beta=float("inf"), maximizing_player=False, root_player=player)
+        execute_action(game_state, action)
+        score = minimax(game_state, depth-1, alpha=float("-inf"), beta=float("inf"), maximizing_player=False, root_player=player)
+        game_state.undo_last_move()
+
         if score > best_score:
             best_score = score
             best_actions = [action]

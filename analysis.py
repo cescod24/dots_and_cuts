@@ -1,3 +1,140 @@
+import csv
+import math
+# ---- Feature Extraction ----
+def compute_features(game_state, current_player):
+    """
+    Compute the 8 differential features for the current_player:
+      1. material_diff
+      2. mobility_diff
+      3. shooting_diff
+      4. pieces_in_danger_diff
+      5. safe_pieces_diff
+      6. avg_distance_to_enemy_diff
+      7. clustering_diff
+      8. board_centrality_diff
+    Returns a dict with these feature names as keys.
+    """
+    # Helper functions
+    def get_pieces(state, player):
+        return [p for p in state.pieces if p.player == player]
+
+    def get_all_actions(state, player):
+        actions = []
+        for piece in get_pieces(state, player):
+            actions.extend(generate_legal_actions(state, piece))
+        return actions
+
+    def get_shoot_actions(state, player):
+        actions = []
+        for piece in get_pieces(state, player):
+            acts = generate_legal_actions(state, piece)
+            actions.extend([a for a in acts if hasattr(a, 'action_type') and a.action_type == "shoot"])
+        return actions
+
+    def is_piece_in_danger(state, piece):
+        # A piece is in danger if it can be shot by an enemy in the next turn
+        enemy = 1 if piece.player == 2 else 2
+        for enemy_piece in get_pieces(state, enemy):
+            # Assume enemy_piece has a method can_shoot(x, y, state)
+            # Use piece.x and piece.y directly
+            if hasattr(enemy_piece, "can_shoot"):
+                if enemy_piece.can_shoot(piece.x, piece.y, state):
+                    return True
+        return False
+
+    def is_piece_safe(state, piece):
+        # Not in danger
+        return not is_piece_in_danger(state, piece)
+
+    def avg_distance_to_enemy(state, player):
+        my_pieces = get_pieces(state, player)
+        enemy = 1 if player == 2 else 2
+        enemy_pieces = get_pieces(state, enemy)
+        if not my_pieces or not enemy_pieces:
+            return 0.0
+        dists = []
+        for p in my_pieces:
+            min_dist = min(manhattan_distance((p.x, p.y), (e.x, e.y)) for e in enemy_pieces)
+            dists.append(min_dist)
+        return sum(dists) / len(dists) if dists else 0.0
+
+    def clustering(state, player):
+        my_pieces = get_pieces(state, player)
+        if len(my_pieces) < 2:
+            return 0.0
+        dists = []
+        for i, p1 in enumerate(my_pieces):
+            for j, p2 in enumerate(my_pieces):
+                if j > i:
+                    dists.append(manhattan_distance((p1.x, p1.y), (p2.x, p2.y)))
+        return sum(dists) / len(dists) if dists else 0.0
+
+    def board_centrality(state, player):
+        my_pieces = get_pieces(state, player)
+        # Assume board is 9x9, center at (4, 4)
+        center = (4, 4)
+        if not my_pieces:
+            return 0.0
+        dists = [manhattan_distance((p.x, p.y), center) for p in my_pieces]
+        return -sum(dists) / len(dists) if dists else 0.0  # negative: lower distance = better
+
+    def manhattan_distance(a, b):
+        return abs(a[0] - b[0]) + abs(a[1] - b[1])
+
+    # Get players
+    me = current_player
+    opp = 1 if me == 2 else 2
+
+    # 1. material_diff
+    my_material = len(get_pieces(game_state, me))
+    opp_material = len(get_pieces(game_state, opp))
+    material_diff = my_material - opp_material
+
+    # 2. mobility_diff
+    my_mobility = len(get_all_actions(game_state, me))
+    opp_mobility = len(get_all_actions(game_state, opp))
+    mobility_diff = my_mobility - opp_mobility
+
+    # 3. shooting_diff
+    my_shooting = len(get_shoot_actions(game_state, me))
+    opp_shooting = len(get_shoot_actions(game_state, opp))
+    shooting_diff = my_shooting - opp_shooting
+
+    # 4. pieces_in_danger_diff
+    my_pieces_in_danger = sum(1 for p in get_pieces(game_state, me) if is_piece_in_danger(game_state, p))
+    opp_pieces_in_danger = sum(1 for p in get_pieces(game_state, opp) if is_piece_in_danger(game_state, p))
+    pieces_in_danger_diff = my_pieces_in_danger - opp_pieces_in_danger
+
+    # 5. safe_pieces_diff
+    my_safe_pieces = sum(1 for p in get_pieces(game_state, me) if is_piece_safe(game_state, p))
+    opp_safe_pieces = sum(1 for p in get_pieces(game_state, opp) if is_piece_safe(game_state, p))
+    safe_pieces_diff = my_safe_pieces - opp_safe_pieces
+
+    # 6. avg_distance_to_enemy_diff
+    my_avg_dist = avg_distance_to_enemy(game_state, me)
+    opp_avg_dist = avg_distance_to_enemy(game_state, opp)
+    avg_distance_to_enemy_diff = my_avg_dist - opp_avg_dist
+
+    # 7. clustering_diff
+    my_clustering = clustering(game_state, me)
+    opp_clustering = clustering(game_state, opp)
+    clustering_diff = my_clustering - opp_clustering
+
+    # 8. board_centrality_diff
+    my_centrality = board_centrality(game_state, me)
+    opp_centrality = board_centrality(game_state, opp)
+    board_centrality_diff = my_centrality - opp_centrality
+
+    return {
+        "material_diff": material_diff,
+        "mobility_diff": mobility_diff,
+        "shooting_diff": shooting_diff,
+        "pieces_in_danger_diff": pieces_in_danger_diff,
+        "safe_pieces_diff": safe_pieces_diff,
+        "avg_distance_to_enemy_diff": avg_distance_to_enemy_diff,
+        "clustering_diff": clustering_diff,
+        "board_centrality_diff": board_centrality_diff,
+    }
 from dotscuts import GameState, setup_standard_game
 from ai_core import generate_legal_actions, execute_action
 from minimax_ai import minimax_best_move
@@ -169,16 +306,18 @@ def simulate_greedy_vs_random_game(game_state: GameState, starting_player: int):
         current_player = 2 if current_player == 1 else 1
         turn_count += 1
 
-def simulate_minimax_vs_greedy_game(game_state: GameState, starting_player: int, depth: int):
+def simulate_minimax_vs_greedy_game(game_state: GameState, starting_player: int, depth: int, feature_log_file=None, root_player=1):
     """
     Simulate a game where one player uses minimax strategy (with given depth) and the other uses greedy strategy,
     alternating turns.
+    If feature_log_file is given, log features for root_player at each of their turns.
     Returns a tuple: (winner player number or None for draw, number of moves, depth (turns), list of available moves counts per turn)
     """
     current_player = starting_player
     move_count = 0
     turn_count = 0
     available_moves_per_turn = []
+    feature_log = []
 
     def get_action(game_state, player):
         if player == 1:
@@ -189,7 +328,11 @@ def simulate_minimax_vs_greedy_game(game_state: GameState, starting_player: int,
     while True:
         game_over, winner = game_state.is_game_over()
         if game_over:
-            return winner, move_count, turn_count, available_moves_per_turn
+            # Mark winner in features if feature_log not empty
+            if feature_log:
+                for row in feature_log:
+                    row["winner"] = winner if winner is not None else 0
+            return winner, move_count, turn_count, available_moves_per_turn, feature_log
 
         player_pieces = [p for p in game_state.pieces if p.player == current_player]
         all_actions = []
@@ -200,14 +343,26 @@ def simulate_minimax_vs_greedy_game(game_state: GameState, starting_player: int,
         available_moves_per_turn.append(len(all_actions))
 
         if not all_actions:
-            # Current player cannot act → opponent wins
             opponent = 1 if current_player == 2 else 2
-            return opponent, move_count, turn_count, available_moves_per_turn
+            if feature_log:
+                for row in feature_log:
+                    row["winner"] = opponent
+            return opponent, move_count, turn_count, available_moves_per_turn, feature_log
+
+        # Feature logging for root_player
+        if current_player == root_player:
+            features = compute_features(game_state, current_player)
+            row = features.copy()
+            row["winner"] = None
+            feature_log.append(row)
 
         action = get_action(game_state, current_player)
         if action is None:
             opponent = 1 if current_player == 2 else 2
-            return opponent, move_count, turn_count, available_moves_per_turn
+            if feature_log:
+                for row in feature_log:
+                    row["winner"] = opponent
+            return opponent, move_count, turn_count, available_moves_per_turn, feature_log
 
         execute_action(game_state, action)
 
@@ -339,10 +494,11 @@ def run_greedy_vs_random_simulations(num_simulations: int):
         "average_available_moves_per_turn": average_available_moves_per_turn
     }
 
-def run_minimax_vs_greedy_simulations(num_simulations: int, depth: int):
+def run_minimax_vs_greedy_simulations(num_simulations: int, depth: int, feature_log_file=None, root_player=1):
     """
     Run multiple simulations where player 1 uses minimax strategy with given depth and player 2 uses greedy,
     alternating starting player each game.
+    If feature_log_file is provided, log features for root_player at each of their turns.
     Returns aggregated statistics.
     """
     results = []
@@ -351,14 +507,19 @@ def run_minimax_vs_greedy_simulations(num_simulations: int, depth: int):
     draws = 0
     all_available_moves_counts = []
 
+    feature_logs = []
     for i in range(num_simulations):
         sim_state = setup_standard_game()
         starting_player = 1 if i % 2 == 0 else 2
-        winner, moves, depth_turns, available_moves_per_turn = simulate_minimax_vs_greedy_game(sim_state, starting_player, depth)
+        winner, moves, depth_turns, available_moves_per_turn, feature_log = simulate_minimax_vs_greedy_game(
+            sim_state, starting_player, depth, feature_log_file=None, root_player=root_player
+        )
         results.append(winner)
         moves_list.append(moves)
         depths_list.append(depth_turns)
         all_available_moves_counts.extend(available_moves_per_turn)
+        if feature_log:
+            feature_logs.extend(feature_log)
         if winner is None:
             draws += 1
 
@@ -378,45 +539,46 @@ def run_minimax_vs_greedy_simulations(num_simulations: int, depth: int):
         "max_moves": max_moves,
         "average_depth": average_depth,
         "draws": draws,
-        "average_available_moves_per_turn": average_available_moves_per_turn
+        "average_available_moves_per_turn": average_available_moves_per_turn,
+        "feature_logs": feature_logs
     }
 
 if __name__ == "__main__":
 
     game_state = setup_standard_game()
-
     starting_player = 1
-
-    num_simulations = 600
+    num_simulations = 100
     WRITE_RESULTS_TO_FILE = False
     RESULTS_FILE_NAME = "results.txt"
-    minimax_depth = 8
+    minimax_depth = 4
+    log_interval = 3  # Ogni quanti turni del root_player scrivere le feature nel CSV
     block_print()
-    # random_results = run_random_simulations(game_state, starting_player, num_simulations)
-    # greedy_results = run_greedy_simulations(game_state, starting_player, num_simulations)
-    # greedy_vs_random_results = run_greedy_vs_random_simulations(num_simulations)
-    minimax_vs_greedy_results = run_minimax_vs_greedy_simulations(num_simulations, minimax_depth)
+
+    minimax_vs_greedy_results = run_minimax_vs_greedy_simulations(
+        num_simulations, minimax_depth, feature_log_file=None, root_player=1
+    )
     enable_print()
 
-    # print(f"Random strategy results over {num_simulations} games:", random_results)
-    # print(f"Greedy strategy results over {num_simulations} games:", greedy_results)
-    # print(f"Greedy vs Random strategy results over {num_simulations} games:", greedy_vs_random_results)
-    print(f"Minimax (depth={minimax_depth}) vs Greedy strategy results over {num_simulations} games:", minimax_vs_greedy_results)
+    # Print minimax vs greedy results
+    print(f"Minimax (depth={minimax_depth}) vs Greedy strategy results over {num_simulations} games:", {k: v for k, v in minimax_vs_greedy_results.items() if k != "feature_logs"})
 
-    # greedy_vs_random_greedy_wins = greedy_vs_random_results["winner_counts"].get(1,0)
-    # greedy_vs_random_random_wins = greedy_vs_random_results["winner_counts"].get(2,0)
-
-    # print(f"Comparison:")
-    # print(f"Greedy vs Random - Greedy wins: {greedy_vs_random_greedy_wins}")
-    # print(f"Greedy vs Random - Random wins: {greedy_vs_random_random_wins}")
+    # Write features to CSV for root_player, with proper header
+    feature_log_file = "feature_log.csv"
+    feature_logs = minimax_vs_greedy_results.get("feature_logs", [])
+    if feature_logs:
+        header = [
+            "material_diff", "mobility_diff", "shooting_diff", "pieces_in_danger_diff",
+            "safe_pieces_diff", "avg_distance_to_enemy_diff", "clustering_diff", "board_centrality_diff", "winner"
+        ]
+        with open(feature_log_file, "w", newline="") as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=header)
+            writer.writeheader()
+            for idx, row in enumerate(feature_logs):
+                # Scrivi solo le righe dei turni multipli di log_interval (0 incluso)
+                if idx % log_interval == 0:
+                    writer.writerow(row)
 
     if WRITE_RESULTS_TO_FILE:
         with open(RESULTS_FILE_NAME, "a") as f:
-            # f.write(f"Random strategy results over {num_simulations} games: {random_results}\n")
-            # f.write(f"Greedy strategy results over {num_simulations} games: {greedy_results}\n")
-            # f.write(f"Greedy vs Random strategy results over {num_simulations} games: {greedy_vs_random_results}\n")
-            f.write(f"Minimax (depth={minimax_depth}) vs Greedy strategy results over {num_simulations} games: {minimax_vs_greedy_results}\n")
-            f.write("Comparison:\n")
-            # f.write(f"Greedy vs Random - Greedy wins: {greedy_vs_random_greedy_wins}\n")
-            # f.write(f"Greedy vs Random - Random wins: {greedy_vs_random_random_wins}\n")
+            f.write(f"Minimax (depth={minimax_depth}) vs Greedy strategy results over {num_simulations} games: { {k: v for k, v in minimax_vs_greedy_results.items() if k != 'feature_logs'} }\n")
             f.write("-" * 60 + "\n")
