@@ -70,4 +70,87 @@ ehmmm boh non so come interpretare.
 
 Ho aggiunto SOLO l'undo delle mosse e cambia già così tanto???
 ora minimax è decisamente più forte di greedy
+
+Minimax (depth=4) vs Greedy strategy results over 1000 games: {'winner_counts': {1: 609, 2: 391}, 
+'average_moves': 42.581, 'max_moves': 120, 'average_depth': 42.581, 
+'draws': 0, 'average_available_moves_per_turn': 4.2765552711303165}
 __________________________________________________________________
+
+# === Logistic Regression parameters (trained values) ===
+LR_MEANS = np.array([
+    0.11232675,
+    1.19902684,
+    0.12217635,
+    -0.11828369,
+    0.23061044,
+    -0.41045414,
+    -2.18466529,
+    1.28327927
+])
+
+LR_STDS = np.array([
+    0.53652077,
+    2.06301329,
+    0.37892051,
+    0.36825379,
+    0.64214112,
+    1.14836881,
+    4.07156428,
+    1.9309659
+])
+
+LR_WEIGHTS = np.array([
+    0.37511014,
+    0.1517887,
+    0.0344337,
+    0.13282581,
+    0.23723877,
+    0.04105137,
+    -0.21269454,
+    0.07904447
+])
+
+LR_INTERCEPT = 0.3122567689286516
+# ========================================================================
+
+# Build feature vector in the SAME ORDER used for training
+    features = np.array([
+        material_diff,
+        mobility_diff,
+        shooting_diff,
+        pieces_in_danger_diff,
+        safe_pieces_diff,
+        avg_distance_to_enemy_diff,
+        clustering_diff,
+        board_centrality_diff
+    ])
+
+    # Standardize using trained scaler statistics
+    features_scaled = (features - LR_MEANS) / LR_STDS
+
+    # Logistic regression linear score (logit)
+    score = np.dot(LR_WEIGHTS, features_scaled) + LR_INTERCEPT
+
+Minimax (depth=2) vs Greedy strategy results over 100 games: {'winner_counts': {1: 77, 2: 23}, 
+'average_moves': 51.28, 'max_moves': 113, 'average_depth': 51.28, 'draws': 0, 
+'average_available_moves_per_turn': 4.260530421216849}
+python analysis.py  3.77s user 0.72s system 159% cpu 2.809 total
+
+Minimax (depth=4) vs Greedy strategy results over 100 games: {'winner_counts': {1: 79, 2: 21}, 
+'average_moves': 46.13, 'max_moves': 112, 'average_depth': 46.13, 'draws': 0, 
+'average_available_moves_per_turn': 4.449815738131368}
+
+Questi nuovi valori sono stati trainati a partire dalle feature raccolte da partite minimax
+vs greedy (n circa 2500 di cui 2000 a depth=2 e le altre a depth=4)
+Dopodiché sono stati usati per creare dei nuovi pesi per la evaluate function
+
+WOW ora minimax vedo che è molto migliorato. 
+
+prossimo step --> osservare a depth=6 o depth=8 ma ci vuole molta potenza e il mio mac non tiene
+e
+trovare nuovi dati, riallenare, riprovare, perfezionare
+
+[DEBUG] Scores -> min: -0.047, max: 0.172, avg: 0.082, best: 0.172 
+questi scores per esempio sono un po' strani
+__________________________________________________________________
+

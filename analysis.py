@@ -32,14 +32,26 @@ def compute_features(game_state, current_player):
         return actions
 
     def is_piece_in_danger(state, piece):
-        # A piece is in danger if it can be shot by an enemy in the next turn
+        # A piece can be in danger only if it is the last arrived piece
+        # among all pieces sharing the same vertex.
+        same_vertex_pieces = [
+            p for p in state.pieces
+            if p.x == piece.x and p.y == piece.y
+        ]
+
+        # If this piece is not the one with the highest arrival_order,
+        # it cannot be shot according to the stacking rule.
+        last_arrived = max(same_vertex_pieces, key=lambda p: p.arrival_order)
+        if piece is not last_arrived:
+            return False
+
+        # Now check if any enemy piece can legally shoot this vertex
         enemy = 1 if piece.player == 2 else 2
         for enemy_piece in get_pieces(state, enemy):
-            # Assume enemy_piece has a method can_shoot(x, y, state)
-            # Use piece.x and piece.y directly
             if hasattr(enemy_piece, "can_shoot"):
                 if enemy_piece.can_shoot(piece.x, piece.y, state):
                     return True
+
         return False
 
     def is_piece_safe(state, piece):
@@ -156,7 +168,6 @@ def greedy_move(game_state: GameState, current_player: int):
     This function measures only the current state without lookahead.
     """
     player_pieces = [p for p in game_state.pieces if p.player == current_player]
-    best_action = None
 
     # First try to find a shooting action
     for piece in player_pieces:
@@ -547,32 +558,34 @@ if __name__ == "__main__":
 
     game_state = setup_standard_game()
     starting_player = 1
-    num_simulations = 100
+    num_simulations = 1000
     WRITE_RESULTS_TO_FILE = False
     RESULTS_FILE_NAME = "results.txt"
-    minimax_depth = 4
+    minimax_depth = 2
     log_interval = 3  # Ogni quanti turni del root_player scrivere le feature nel CSV
-    block_print()
 
+    #block_print()
     minimax_vs_greedy_results = run_minimax_vs_greedy_simulations(
         num_simulations, minimax_depth, feature_log_file=None, root_player=1
     )
-    enable_print()
+    #enable_print()
 
     # Print minimax vs greedy results
     print(f"Minimax (depth={minimax_depth}) vs Greedy strategy results over {num_simulations} games:", {k: v for k, v in minimax_vs_greedy_results.items() if k != "feature_logs"})
 
-    # Write features to CSV for root_player, with proper header
-    feature_log_file = "feature_log.csv"
+    # Write features to CSV for root_player, with proper header only if file does not exist
+    feature_log_file = ""
     feature_logs = minimax_vs_greedy_results.get("feature_logs", [])
     if feature_logs:
         header = [
             "material_diff", "mobility_diff", "shooting_diff", "pieces_in_danger_diff",
             "safe_pieces_diff", "avg_distance_to_enemy_diff", "clustering_diff", "board_centrality_diff", "winner"
         ]
-        with open(feature_log_file, "w", newline="") as csvfile:
+        file_exists = os.path.isfile(feature_log_file)
+        with open(feature_log_file, "a", newline="") as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames=header)
-            writer.writeheader()
+            if not file_exists:
+                writer.writeheader()
             for idx, row in enumerate(feature_logs):
                 # Scrivi solo le righe dei turni multipli di log_interval (0 incluso)
                 if idx % log_interval == 0:

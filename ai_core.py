@@ -50,3 +50,4 @@ def execute_action(game_state: GameState, action: Action):
         piece.move(target_x, target_y, game_state)
     elif action_type == "shoot":
         piece.shoot(target_x, target_y, game_state)
+        

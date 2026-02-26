@@ -2,6 +2,47 @@ from dotscuts import GameState
 from ai_core import Action, generate_legal_actions, execute_action
 import random
 
+import pandas as pd
+import numpy as np
+
+
+# === Logistic Regression parameters (trained values) ===
+LR_MEANS = np.array([
+    0.11232675,
+    1.19902684,
+    0.12217635,
+    -0.11828369,
+    0.23061044,
+    -0.41045414,
+    -2.18466529,
+    1.28327927
+])
+
+LR_STDS = np.array([
+    0.53652077,
+    2.06301329,
+    0.37892051,
+    0.36825379,
+    0.64214112,
+    1.14836881,
+    4.07156428,
+    1.9309659
+])
+
+LR_WEIGHTS = np.array([
+    0.37511014,
+    0.1517887,
+    0.0344337,
+    0.13282581,
+    0.23723877,
+    0.04105137,
+    -0.21269454,
+    0.07904447
+])
+
+LR_INTERCEPT = 0.3122567689286516
+# ========================================================================
+
 def generate_all_actions(game_state: GameState, current_player: int) -> list:
     """
     Generates all legal actions for a player
@@ -21,27 +62,136 @@ def evaluate_position(game_state: GameState, current_player: int) -> float:
     """
     score = 0
 
-    player_pieces = [p for p in game_state.pieces if p.player == current_player]
-    enemy_pieces = [p for p in game_state.pieces if p.player != current_player]
+    # Helper functions
+    def get_pieces(state, player):
+        return [p for p in state.pieces if p.player == player]
 
-    player_actions = generate_all_actions(game_state, current_player=current_player)
-    enemy_player = 2 if current_player == 1 else 1
-    enemy_actions = generate_all_actions(game_state, current_player=enemy_player)
+    def get_all_actions(state, player):
+        actions = []
+        for piece in get_pieces(state, player):
+            actions.extend(generate_legal_actions(state, piece))
+        return actions
 
-    # 1 piece = 1 point.            
-    pieces_difference = 2 * (len(player_pieces) - len(enemy_pieces))
-    score += pieces_difference
+    def get_shoot_actions(state, player):
+        actions = []
+        for piece in get_pieces(state, player):
+            acts = generate_legal_actions(state, piece)
+            actions.extend([a for a in acts if hasattr(a, 'action_type') and a.action_type == "shoot"])
+        return actions
 
-    # 1 available move = 0.1 point 
-    moves_difference = len(player_actions) - len(enemy_actions)
-    score += 0.25 * moves_difference
+    def is_piece_in_danger(state, piece):
+        # A piece is in danger if it can be shot by an enemy in the next turn
+        enemy = 1 if piece.player == 2 else 2
+        for enemy_piece in get_pieces(state, enemy):
+            # Assume enemy_piece has a method can_shoot(x, y, state)
+            # Use piece.x and piece.y directly
+            if hasattr(enemy_piece, "can_shoot"):
+                if enemy_piece.can_shoot(piece.x, piece.y, state):
+                    return True
+        return False
 
-    # 1 shooting opportunity = 1 point
-    shooting_opportunities = [a for a in player_actions if a.action_type == "shoot"] 
-    getting_shoot_opportunities = [a for a in enemy_actions if a.action_type == "shoot"] 
-    score += 3 * (len(shooting_opportunities) - len(getting_shoot_opportunities))
+    def is_piece_safe(state, piece):
+        # Not in danger
+        return not is_piece_in_danger(state, piece)
 
-    return score
+    def avg_distance_to_enemy(state, player):
+        my_pieces = get_pieces(state, player)
+        enemy = 1 if player == 2 else 2
+        enemy_pieces = get_pieces(state, enemy)
+        if not my_pieces or not enemy_pieces:
+            return 0.0
+        dists = []
+        for p in my_pieces:
+            min_dist = min(manhattan_distance((p.x, p.y), (e.x, e.y)) for e in enemy_pieces)
+            dists.append(min_dist)
+        return sum(dists) / len(dists) if dists else 0.0
+
+    def clustering(state, player):
+        my_pieces = get_pieces(state, player)
+        if len(my_pieces) < 2:
+            return 0.0
+        dists = []
+        for i, p1 in enumerate(my_pieces):
+            for j, p2 in enumerate(my_pieces):
+                if j > i:
+                    dists.append(manhattan_distance((p1.x, p1.y), (p2.x, p2.y)))
+        return sum(dists) / len(dists) if dists else 0.0
+
+    def board_centrality(state, player):
+        my_pieces = get_pieces(state, player)
+        # Assume board is 9x9, center at (4, 4)
+        center = (4, 4)
+        if not my_pieces:
+            return 0.0
+        dists = [manhattan_distance((p.x, p.y), center) for p in my_pieces]
+        return -sum(dists) / len(dists) if dists else 0.0  # negative: lower distance = better
+
+    def manhattan_distance(a, b):
+        return abs(a[0] - b[0]) + abs(a[1] - b[1])
+
+    # Get players
+    me = current_player
+    opp = 1 if me == 2 else 2
+
+    # 1. material_diff
+    my_material = len(get_pieces(game_state, me))
+    opp_material = len(get_pieces(game_state, opp))
+    material_diff = my_material - opp_material
+
+    # 2. mobility_diff
+    my_mobility = len(get_all_actions(game_state, me))
+    opp_mobility = len(get_all_actions(game_state, opp))
+    mobility_diff = my_mobility - opp_mobility
+
+    # 3. shooting_diff
+    my_shooting = len(get_shoot_actions(game_state, me))
+    opp_shooting = len(get_shoot_actions(game_state, opp))
+    shooting_diff = my_shooting - opp_shooting
+
+    # 4. pieces_in_danger_diff
+    my_pieces_in_danger = sum(1 for p in get_pieces(game_state, me) if is_piece_in_danger(game_state, p))
+    opp_pieces_in_danger = sum(1 for p in get_pieces(game_state, opp) if is_piece_in_danger(game_state, p))
+    pieces_in_danger_diff = my_pieces_in_danger - opp_pieces_in_danger
+
+    # 5. safe_pieces_diff
+    my_safe_pieces = sum(1 for p in get_pieces(game_state, me) if is_piece_safe(game_state, p))
+    opp_safe_pieces = sum(1 for p in get_pieces(game_state, opp) if is_piece_safe(game_state, p))
+    safe_pieces_diff = my_safe_pieces - opp_safe_pieces
+
+    # 6. avg_distance_to_enemy_diff
+    my_avg_dist = avg_distance_to_enemy(game_state, me)
+    opp_avg_dist = avg_distance_to_enemy(game_state, opp)
+    avg_distance_to_enemy_diff = my_avg_dist - opp_avg_dist
+
+    # 7. clustering_diff
+    my_clustering = clustering(game_state, me)
+    opp_clustering = clustering(game_state, opp)
+    clustering_diff = my_clustering - opp_clustering
+
+    # 8. board_centrality_diff
+    my_centrality = board_centrality(game_state, me)
+    opp_centrality = board_centrality(game_state, opp)
+    board_centrality_diff = my_centrality - opp_centrality
+
+    # Build feature vector in the SAME ORDER used for training
+    features = np.array([
+        material_diff,
+        mobility_diff,
+        shooting_diff,
+        pieces_in_danger_diff,
+        safe_pieces_diff,
+        avg_distance_to_enemy_diff,
+        clustering_diff,
+        board_centrality_diff
+    ])
+
+    # Standardize using trained scaler statistics
+    features_scaled = (features - LR_MEANS) / LR_STDS
+
+    # Logistic regression linear score (logit)
+    score = np.dot(LR_WEIGHTS, features_scaled) + LR_INTERCEPT
+
+    return float(score)
 
 
 def minimax(game_state: GameState, depth: int, alpha: float, beta: float, maximizing_player: bool, root_player: int) -> float:
@@ -102,9 +252,11 @@ def minimax_best_move(game_state: GameState, player: int, depth: int) -> Action:
     actions = generate_all_actions(game_state, player)
     best_score = float("-inf")
     best_actions = []
+    all_scores = []
     for action in actions:
         execute_action(game_state, action)
         score = minimax(game_state, depth-1, alpha=float("-inf"), beta=float("inf"), maximizing_player=False, root_player=player)
+        all_scores.append(score)
         game_state.undo_last_move()
 
         if score > best_score:
@@ -112,8 +264,66 @@ def minimax_best_move(game_state: GameState, player: int, depth: int) -> Action:
             best_actions = [action]
         elif score == best_score:
             best_actions.append(action)
+
+    if all_scores:
+        print(
+            f"[DEBUG] Scores -> "
+            f"min: {min(all_scores):.3f}, "
+            f"max: {max(all_scores):.3f}, "
+            f"avg: {sum(all_scores)/len(all_scores):.3f}, "
+            f"best: {best_score:.3f}"
+        )
+
     return random.choice(best_actions) if best_actions else None
 
 
 if __name__ == "__main__":
-    ...
+
+    ###### WEIGHTS ANALYSIS ##############
+
+    # Carica il CSV
+    df = pd.read_csv("feature_log.csv")
+
+    # Target: 1 se vince player 1, 0 se vince player 2
+    df["y"] = (df["winner"] == 1).astype(int)
+
+    # Feature matrix
+    feature_cols = [
+        "material_diff",
+        "mobility_diff",
+        "shooting_diff",
+        "pieces_in_danger_diff",
+        "safe_pieces_diff",
+        "avg_distance_to_enemy_diff",
+        "clustering_diff",
+        "board_centrality_diff"
+    ]
+
+    X = df[feature_cols].values
+    y = df["y"].values
+
+    from sklearn.preprocessing import StandardScaler
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+    print("Means:", scaler.mean_)
+    print("Stds:", scaler.scale_)
+
+    from sklearn.model_selection import train_test_split
+    X_train, X_test, y_train, y_test = train_test_split(
+        X_scaled, y, test_size=0.2, random_state=42
+    )
+
+    from sklearn.linear_model import LogisticRegression
+    model = LogisticRegression(max_iter=1000)
+    model.fit(X_train, y_train)
+
+    from sklearn.metrics import accuracy_score
+    y_pred = model.predict(X_test)
+    accuracy = accuracy_score(y_test, y_pred)
+    print("Accuracy:", accuracy)
+
+    weights = model.coef_[0]
+    intercept = model.intercept_[0]
+    print("Weights raw:", model.coef_[0])
+    print("Feature order:", feature_cols)
+    print("Intercept:", intercept)
