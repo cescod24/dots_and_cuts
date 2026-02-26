@@ -132,6 +132,8 @@ class GameState:
         piece.x = old_x
         piece.y = old_y
         piece.arrival_order = old_arrival
+        if piece not in self.pieces:
+            self.pieces.append(piece)
 
         # Remove visited edges (move has single "edge", shoot has "edges")
         if "edge" in last:
@@ -144,6 +146,8 @@ class GameState:
 
         # Restore captured pieces
         for p, x, y, arrival in removed_snapshot:
+            if p is piece:
+                continue
             p.x = x
             p.y = y
             p.arrival_order = arrival

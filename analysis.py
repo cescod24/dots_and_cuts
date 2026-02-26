@@ -381,6 +381,118 @@ def simulate_minimax_vs_greedy_game(game_state: GameState, starting_player: int,
         current_player = 2 if current_player == 1 else 1
         turn_count += 1
 
+
+# ---- NEW: Simulate Minimax vs Minimax Game ----
+def simulate_minimax_vs_minimax_game(game_state: GameState, starting_player: int, depth: int, feature_log_file=None, root_player=1):
+    """
+    Simulate a game where both players use minimax strategy (with given depth).
+    If feature_log_file is given, log features for root_player at each of their turns.
+    Returns a tuple: (winner player number or None for draw, number of moves, depth (turns), list of available moves counts per turn, feature_log)
+    """
+    current_player = starting_player
+    move_count = 0
+    turn_count = 0
+    available_moves_per_turn = []
+    feature_log = []
+
+    def get_action(game_state, player):
+        return minimax_best_move(game_state, player, depth)
+
+    while True:
+        game_over, winner = game_state.is_game_over()
+        if game_over:
+            # Mark winner in features if feature_log not empty
+            if feature_log:
+                for row in feature_log:
+                    row["winner"] = winner if winner is not None else 0
+            return winner, move_count, turn_count, available_moves_per_turn, feature_log
+
+        player_pieces = [p for p in game_state.pieces if p.player == current_player]
+        all_actions = []
+        for piece in player_pieces:
+            actions = generate_legal_actions(game_state, piece)
+            all_actions.extend(actions)
+
+        available_moves_per_turn.append(len(all_actions))
+
+        if not all_actions:
+            opponent = 1 if current_player == 2 else 2
+            if feature_log:
+                for row in feature_log:
+                    row["winner"] = opponent
+            return opponent, move_count, turn_count, available_moves_per_turn, feature_log
+
+        # Feature logging for root_player
+        if current_player == root_player:
+            features = compute_features(game_state, current_player)
+            row = features.copy()
+            row["winner"] = None
+            feature_log.append(row)
+
+        action = get_action(game_state, current_player)
+        if action is None:
+            opponent = 1 if current_player == 2 else 2
+            if feature_log:
+                for row in feature_log:
+                    row["winner"] = opponent
+            return opponent, move_count, turn_count, available_moves_per_turn, feature_log
+
+        execute_action(game_state, action)
+
+        move_count += 1
+        current_player = 2 if current_player == 1 else 1
+        turn_count += 1
+
+
+# ---- NEW: Run Minimax vs Minimax Simulations ----
+def run_minimax_vs_minimax_simulations(num_simulations: int, depth: int, feature_log_file=None, root_player=1):
+    """
+    Run multiple simulations where both players use minimax strategy with given depth,
+    alternating starting player each game.
+    If feature_log_file is provided, log features for root_player at each of their turns.
+    Returns aggregated statistics.
+    """
+    results = []
+    moves_list = []
+    depths_list = []
+    draws = 0
+    all_available_moves_counts = []
+    feature_logs = []
+    for i in range(num_simulations):
+        sim_state = setup_standard_game()
+        starting_player = 1 if i % 2 == 0 else 2
+        winner, moves, depth_turns, available_moves_per_turn, feature_log = simulate_minimax_vs_minimax_game(
+            sim_state, starting_player, depth, feature_log_file=None, root_player=root_player
+        )
+        results.append(winner)
+        moves_list.append(moves)
+        depths_list.append(depth_turns)
+        all_available_moves_counts.extend(available_moves_per_turn)
+        if feature_log:
+            feature_logs.extend(feature_log)
+        if winner is None:
+            draws += 1
+
+    winner_counts = {1: 0, 2: 0}
+    for w in results:
+        if w in winner_counts:
+            winner_counts[w] += 1
+
+    average_moves = statistics.mean(moves_list) if moves_list else 0
+    max_moves = max(moves_list) if moves_list else 0
+    average_depth = statistics.mean(depths_list) if depths_list else 0
+    average_available_moves_per_turn = statistics.mean(all_available_moves_counts) if all_available_moves_counts else 0
+
+    return {
+        "winner_counts": winner_counts,
+        "average_moves": average_moves,
+        "max_moves": max_moves,
+        "average_depth": average_depth,
+        "draws": draws,
+        "average_available_moves_per_turn": average_available_moves_per_turn,
+        "feature_logs": feature_logs
+    }
+
 def run_random_simulations(game_state: GameState, starting_player: int, num_simulations: int):
     """
     Run multiple random simulations and return statistics about the results.
@@ -554,29 +666,70 @@ def run_minimax_vs_greedy_simulations(num_simulations: int, depth: int, feature_
         "feature_logs": feature_logs
     }
 
-if __name__ == "__main__":
+# if __name__ == "__main__":
+#     # Minimax vs Greedy block (commented out)
+#     game_state = setup_standard_game()
+#     starting_player = 1
+#     num_simulations = 10000
+#     WRITE_RESULTS_TO_FILE = False
+#     RESULTS_FILE_NAME = "results.txt"
+#     minimax_depth = 2
+#     log_interval = 3  # Ogni quanti turni del root_player scrivere le feature nel CSV
+#
+#     block_print()
+#     minimax_vs_greedy_results = run_minimax_vs_greedy_simulations(
+#         num_simulations, minimax_depth, feature_log_file=None, root_player=1
+#     )
+#     enable_print()
+#
+#     # Print minimax vs greedy results
+#     print(f"Minimax (depth={minimax_depth}) vs Greedy strategy results over {num_simulations} games:", {k: v for k, v in minimax_vs_greedy_results.items() if k != "feature_logs"})
+#
+#     # Write features to CSV for root_player, with proper header only if file does not exist
+#     feature_log_file = ""
+#     feature_logs = minimax_vs_greedy_results.get("feature_logs", [])
+#     if feature_logs:
+#         header = [
+#             "material_diff", "mobility_diff", "shooting_diff", "pieces_in_danger_diff",
+#             "safe_pieces_diff", "avg_distance_to_enemy_diff", "clustering_diff", "board_centrality_diff", "winner"
+#         ]
+#         file_exists = os.path.isfile(feature_log_file)
+#         with open(feature_log_file, "a", newline="") as csvfile:
+#             writer = csv.DictWriter(csvfile, fieldnames=header)
+#             if not file_exists:
+#                 writer.writeheader()
+#             for idx, row in enumerate(feature_logs):
+#                 # Scrivi solo le righe dei turni multipli di log_interval (0 incluso)
+#                 if idx % log_interval == 0:
+#                     writer.writerow(row)
+#
+#     if WRITE_RESULTS_TO_FILE:
+#         with open(RESULTS_FILE_NAME, "a") as f:
+#             f.write(f"Minimax (depth={minimax_depth}) vs Greedy strategy results over {num_simulations} games: { {k: v for k, v in minimax_vs_greedy_results.items() if k != 'feature_logs'} }\n")
+#             f.write("-" * 60 + "\n")
 
-    game_state = setup_standard_game()
-    starting_player = 1
-    num_simulations = 1000
+if __name__ == "__main__":
+    # Parameters
+    num_simulations = 300
+    minimax_depth = 2
     WRITE_RESULTS_TO_FILE = False
     RESULTS_FILE_NAME = "results.txt"
-    minimax_depth = 2
-    log_interval = 3  # Ogni quanti turni del root_player scrivere le feature nel CSV
+    feature_log_file = "" 
+    log_interval = 3  
+    root_player = 1
 
-    #block_print()
-    minimax_vs_greedy_results = run_minimax_vs_greedy_simulations(
-        num_simulations, minimax_depth, feature_log_file=None, root_player=1
+    block_print()
+    minimax_vs_minimax_results = run_minimax_vs_minimax_simulations(
+        num_simulations, minimax_depth, feature_log_file=None, root_player=root_player
     )
-    #enable_print()
+    enable_print()
 
-    # Print minimax vs greedy results
-    print(f"Minimax (depth={minimax_depth}) vs Greedy strategy results over {num_simulations} games:", {k: v for k, v in minimax_vs_greedy_results.items() if k != "feature_logs"})
+    # Print minimax vs minimax results
+    print(f"Minimax (depth={minimax_depth}) vs Minimax strategy results over {num_simulations} games:", {k: v for k, v in minimax_vs_minimax_results.items() if k != "feature_logs"})
 
     # Write features to CSV for root_player, with proper header only if file does not exist
-    feature_log_file = ""
-    feature_logs = minimax_vs_greedy_results.get("feature_logs", [])
-    if feature_logs:
+    feature_logs = minimax_vs_minimax_results.get("feature_logs", [])
+    if feature_logs and feature_log_file:
         header = [
             "material_diff", "mobility_diff", "shooting_diff", "pieces_in_danger_diff",
             "safe_pieces_diff", "avg_distance_to_enemy_diff", "clustering_diff", "board_centrality_diff", "winner"
@@ -587,11 +740,11 @@ if __name__ == "__main__":
             if not file_exists:
                 writer.writeheader()
             for idx, row in enumerate(feature_logs):
-                # Scrivi solo le righe dei turni multipli di log_interval (0 incluso)
+                # Write only rows at multiples of log_interval (including 0)
                 if idx % log_interval == 0:
                     writer.writerow(row)
 
     if WRITE_RESULTS_TO_FILE:
         with open(RESULTS_FILE_NAME, "a") as f:
-            f.write(f"Minimax (depth={minimax_depth}) vs Greedy strategy results over {num_simulations} games: { {k: v for k, v in minimax_vs_greedy_results.items() if k != 'feature_logs'} }\n")
+            f.write(f"Minimax (depth={minimax_depth}) vs Minimax strategy results over {num_simulations} games: { {k: v for k, v in minimax_vs_minimax_results.items() if k != 'feature_logs'} }\n")
             f.write("-" * 60 + "\n")

@@ -218,9 +218,15 @@ def minimax(game_state: GameState, depth: int, alpha: float, beta: float, maximi
         max_eval = float("-inf")
 
         for action in player_actions:
+            # print("Game state before action")
+            # game_state.print_game_state()
             execute_action(game_state, action)
+            # print("Game state after action")
+            # game_state.print_game_state()
             score = minimax(game_state, depth-1, alpha, beta, False, root_player)
             game_state.undo_last_move()
+            # print("Game state after undo")
+            # game_state.print_game_state()
 
             max_eval = max(max_eval, score)
             alpha = max(alpha, max_eval)
@@ -234,9 +240,15 @@ def minimax(game_state: GameState, depth: int, alpha: float, beta: float, maximi
         min_eval = float("inf")
 
         for action in player_actions:
+            # print("Game state before action")
+            # game_state.print_game_state()
             execute_action(game_state, action)
+            # print("Game state after action")
+            # game_state.print_game_state()
             score = minimax(game_state, depth-1, alpha, beta, True, root_player)
             game_state.undo_last_move()
+            # print("Game state after undo")
+            # game_state.print_game_state()
 
             min_eval = min(min_eval, score)
             beta = min(beta, min_eval)
