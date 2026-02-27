@@ -332,7 +332,8 @@ def simulate_minimax_vs_greedy_game(game_state: GameState, starting_player: int,
 
     def get_action(game_state, player):
         if player == 1:
-            return minimax_best_move(game_state, player, depth)
+            # Use minimax_best_move with single version argument, default "v1"
+            return minimax_best_move(game_state, player, depth, version="v1")
         else:
             return greedy_move(game_state, player)
 
@@ -385,7 +386,7 @@ def simulate_minimax_vs_greedy_game(game_state: GameState, starting_player: int,
 # ---- NEW: Simulate Minimax vs Minimax Game ----
 def simulate_minimax_vs_minimax_game(game_state: GameState, starting_player: int, depth: int, feature_log_file=None, root_player=1):
     """
-    Simulate a game where both players use minimax strategy (with given depth).
+    Simulate a game where both players use minimax strategy (with given depth and version).
     If feature_log_file is given, log features for root_player at each of their turns.
     Returns a tuple: (winner player number or None for draw, number of moves, depth (turns), list of available moves counts per turn, feature_log)
     """
@@ -396,7 +397,8 @@ def simulate_minimax_vs_minimax_game(game_state: GameState, starting_player: int
     feature_log = []
 
     def get_action(game_state, player):
-        return minimax_best_move(game_state, player, depth)
+        # Use minimax_best_move with single version argument, default "v1"
+        return minimax_best_move(game_state, player, depth, version="v1")
 
     while True:
         game_over, winner = game_state.is_game_over()
@@ -447,7 +449,7 @@ def simulate_minimax_vs_minimax_game(game_state: GameState, starting_player: int
 # ---- NEW: Run Minimax vs Minimax Simulations ----
 def run_minimax_vs_minimax_simulations(num_simulations: int, depth: int, feature_log_file=None, root_player=1):
     """
-    Run multiple simulations where both players use minimax strategy with given depth,
+    Run multiple simulations where both players use minimax strategy with given depth and version,
     alternating starting player each game.
     If feature_log_file is provided, log features for root_player at each of their turns.
     Returns aggregated statistics.
@@ -619,7 +621,7 @@ def run_greedy_vs_random_simulations(num_simulations: int):
 
 def run_minimax_vs_greedy_simulations(num_simulations: int, depth: int, feature_log_file=None, root_player=1):
     """
-    Run multiple simulations where player 1 uses minimax strategy with given depth and player 2 uses greedy,
+    Run multiple simulations where player 1 uses minimax strategy with given depth and version, and player 2 uses greedy,
     alternating starting player each game.
     If feature_log_file is provided, log features for root_player at each of their turns.
     Returns aggregated statistics.
@@ -710,7 +712,7 @@ def run_minimax_vs_greedy_simulations(num_simulations: int, depth: int, feature_
 
 if __name__ == "__main__":
     # Parameters
-    num_simulations = 300
+    num_simulations = 1000
     minimax_depth = 2
     WRITE_RESULTS_TO_FILE = False
     RESULTS_FILE_NAME = "results.txt"

@@ -154,3 +154,18 @@ trovare nuovi dati, riallenare, riprovare, perfezionare
 questi scores per esempio sono un po' strani
 __________________________________________________________________
 
+Minimax (depth=2) vs Minimax strategy results over 100000 games: {'winner_counts': {1: 47901, 2: 52099}, 
+'average_moves': 75.41069, 'max_moves': 184, 'average_depth': 75.41069, 'draws': 0, 
+'average_available_moves_per_turn': 4.776110257047111}
+python analysis.py  10073.96s user 32.24s system 45% cpu 6:06:23.75 total
+
+wow che dataset!!
+ora vedo che c'è un bias del 4% tra player 1 e player 2 anche se uso lo stesso motore. 
+Ho risolto il bug dell'undo, ma potrebbe esserci bias strutturale perché calcolo minimax sempre
+cominciando dallo stesso pezzo -> dovrei shufflare.
+Con questi pesi cerco di fare un minimax v2 e potenziarlo. 
+
+__________________________________________________________________
+
+
+

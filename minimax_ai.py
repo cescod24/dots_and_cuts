@@ -5,44 +5,6 @@ import random
 import pandas as pd
 import numpy as np
 
-
-# === Logistic Regression parameters (trained values) ===
-LR_MEANS = np.array([
-    0.11232675,
-    1.19902684,
-    0.12217635,
-    -0.11828369,
-    0.23061044,
-    -0.41045414,
-    -2.18466529,
-    1.28327927
-])
-
-LR_STDS = np.array([
-    0.53652077,
-    2.06301329,
-    0.37892051,
-    0.36825379,
-    0.64214112,
-    1.14836881,
-    4.07156428,
-    1.9309659
-])
-
-LR_WEIGHTS = np.array([
-    0.37511014,
-    0.1517887,
-    0.0344337,
-    0.13282581,
-    0.23723877,
-    0.04105137,
-    -0.21269454,
-    0.07904447
-])
-
-LR_INTERCEPT = 0.3122567689286516
-# ========================================================================
-
 def generate_all_actions(game_state: GameState, current_player: int) -> list:
     """
     Generates all legal actions for a player
@@ -56,9 +18,10 @@ def generate_all_actions(game_state: GameState, current_player: int) -> list:
     return all_actions
 
 
-def evaluate_position(game_state: GameState, current_player: int) -> float:
+def evaluate_position_v1(game_state: GameState, current_player: int,
+                         weights, means, stds, intercept) -> float:
     """
-    Evaluates a GameState according to fixed rules
+    Evaluates a GameState according to fixed rules (version 1)
     """
     score = 0
 
@@ -186,18 +149,106 @@ def evaluate_position(game_state: GameState, current_player: int) -> float:
     ])
 
     # Standardize using trained scaler statistics
-    features_scaled = (features - LR_MEANS) / LR_STDS
+    features_scaled = (features - means) / stds
 
     # Logistic regression linear score (logit)
-    score = np.dot(LR_WEIGHTS, features_scaled) + LR_INTERCEPT
+    score = np.dot(weights, features_scaled) + intercept
 
     return float(score)
 
 
-def minimax(game_state: GameState, depth: int, alpha: float, beta: float, maximizing_player: bool, root_player: int) -> float:
+# Dictionary to hold multiple minimax AI versions.
+# To add new versions, define their evaluation functions and parameters,
+# then add them here with a unique key.
+MINIMAX_VERSIONS = {
+    "v1": {
+        "evaluate_position": lambda state, player: evaluate_position_v1(
+            state, player,
+            weights=MINIMAX_VERSIONS["v1"]["weights"],
+            means=MINIMAX_VERSIONS["v1"]["means"],
+            stds=MINIMAX_VERSIONS["v1"]["stds"],
+            intercept=MINIMAX_VERSIONS["v1"]["intercept"]
+        ),
+        "weights":  np.array([
+                    0.37511014,
+                    0.1517887,
+                    0.0344337,
+                    0.13282581,
+                    0.23723877,
+                    0.04105137,
+                    -0.21269454,
+                    0.07904447
+                    ]),
+        "means":    np.array([
+                    0.11232675,
+                    1.19902684,
+                    0.12217635,
+                    -0.11828369,
+                    0.23061044,
+                    -0.41045414,
+                    -2.18466529,
+                    1.28327927
+                    ]),
+        "stds":     np.array([
+                    0.53652077,
+                    2.06301329,
+                    0.37892051,
+                    0.36825379,
+                    0.64214112,
+                    1.14836881,
+                    4.07156428,
+                    1.9309659
+                    ]),
+        "intercept": 0.3122567689286516
+    },
+    "v2": {
+        "evaluate_position": lambda state, player: evaluate_position_v1(
+            state, player,
+            weights=MINIMAX_VERSIONS["v1"]["weights"],
+            means=MINIMAX_VERSIONS["v1"]["means"],
+            stds=MINIMAX_VERSIONS["v1"]["stds"],
+            intercept=MINIMAX_VERSIONS["v1"]["intercept"]
+        ),
+        "weights":  np.array([
+                    0.37511014,
+                    0.1517887,
+                    0.0344337,
+                    0.13282581,
+                    0.23723877,
+                    0.04105137,
+                    -0.21269454,
+                    0.07904447
+                    ]),
+        "means":    np.array([
+                    0.11232675,
+                    1.19902684,
+                    0.12217635,
+                    -0.11828369,
+                    0.23061044,
+                    -0.41045414,
+                    -2.18466529,
+                    1.28327927
+                    ]),
+        "stds":     np.array([
+                    0.53652077,
+                    2.06301329,
+                    0.37892051,
+                    0.36825379,
+                    0.64214112,
+                    1.14836881,
+                    4.07156428,
+                    1.9309659
+                    ]),
+        "intercept": 0.3122567689286516
+    },
+}
+
+def minimax(game_state: GameState, depth: int, alpha: float, beta: float, maximizing_player: bool, root_player: int, version: str = "v1") -> float:
     """
-    Minimax with AB pruning
+    Minimax with AB pruning, supporting multiple AI versions.
     """
+    evaluate_position = MINIMAX_VERSIONS[version]["evaluate_position"]
+
     game_over, winner = game_state.is_game_over()
     player = root_player if maximizing_player else (2 if root_player == 1 else 1)
     opponent = 2 if player == 1 else 1
@@ -215,6 +266,7 @@ def minimax(game_state: GameState, depth: int, alpha: float, beta: float, maximi
     
     if maximizing_player:
         player_actions = generate_all_actions(game_state, player)
+        random.shuffle(player_actions)
         max_eval = float("-inf")
 
         for action in player_actions:
@@ -223,7 +275,7 @@ def minimax(game_state: GameState, depth: int, alpha: float, beta: float, maximi
             execute_action(game_state, action)
             # print("Game state after action")
             # game_state.print_game_state()
-            score = minimax(game_state, depth-1, alpha, beta, False, root_player)
+            score = minimax(game_state, depth-1, alpha, beta, False, root_player, version=version)
             game_state.undo_last_move()
             # print("Game state after undo")
             # game_state.print_game_state()
@@ -237,6 +289,7 @@ def minimax(game_state: GameState, depth: int, alpha: float, beta: float, maximi
     
     if not maximizing_player:
         player_actions = generate_all_actions(game_state, player)
+        random.shuffle(player_actions)
         min_eval = float("inf")
 
         for action in player_actions:
@@ -245,7 +298,7 @@ def minimax(game_state: GameState, depth: int, alpha: float, beta: float, maximi
             execute_action(game_state, action)
             # print("Game state after action")
             # game_state.print_game_state()
-            score = minimax(game_state, depth-1, alpha, beta, True, root_player)
+            score = minimax(game_state, depth-1, alpha, beta, True, root_player, version=version)
             game_state.undo_last_move()
             # print("Game state after undo")
             # game_state.print_game_state()
@@ -257,9 +310,9 @@ def minimax(game_state: GameState, depth: int, alpha: float, beta: float, maximi
         
         return min_eval
     
-def minimax_best_move(game_state: GameState, player: int, depth: int) -> Action:
+def minimax_best_move(game_state: GameState, player: int, depth: int, version: str = "v1") -> Action:
     """
-    Returns the best action for the player using minimax search
+    Returns the best action for the player using minimax search with specified version.
     """
     actions = generate_all_actions(game_state, player)
     best_score = float("-inf")
@@ -267,7 +320,7 @@ def minimax_best_move(game_state: GameState, player: int, depth: int) -> Action:
     all_scores = []
     for action in actions:
         execute_action(game_state, action)
-        score = minimax(game_state, depth-1, alpha=float("-inf"), beta=float("inf"), maximizing_player=False, root_player=player)
+        score = minimax(game_state, depth-1, alpha=float("-inf"), beta=float("inf"), maximizing_player=False, root_player=player, version=version)
         all_scores.append(score)
         game_state.undo_last_move()
 
@@ -294,7 +347,8 @@ if __name__ == "__main__":
     ###### WEIGHTS ANALYSIS ##############
 
     # Carica il CSV
-    df = pd.read_csv("feature_log.csv")
+    df = pd.read_csv("feature_log_v2_depth2.csv")
+    print(df.columns)
 
     # Target: 1 se vince player 1, 0 se vince player 2
     df["y"] = (df["winner"] == 1).astype(int)
@@ -339,3 +393,9 @@ if __name__ == "__main__":
     print("Weights raw:", model.coef_[0])
     print("Feature order:", feature_cols)
     print("Intercept:", intercept)
+
+    # To test different AI versions, change the version string below:
+    # version_to_test = "v1"
+    # You can then call minimax_best_move or minimax with version=version_to_test
+    # Example:
+    # best_action = minimax_best_move(game_state, player=1, depth=3, version=version_to_test)
