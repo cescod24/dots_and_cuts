@@ -164,8 +164,27 @@ ora vedo che c'è un bias del 4% tra player 1 e player 2 anche se uso lo stesso 
 Ho risolto il bug dell'undo, ma potrebbe esserci bias strutturale perché calcolo minimax sempre
 cominciando dallo stesso pezzo -> dovrei shufflare.
 Con questi pesi cerco di fare un minimax v2 e potenziarlo. 
-
 __________________________________________________________________
 
+Minimax v2 vs Minimax v1 (depth=2) results over 1000 games: {'winner_counts': {1: 528, 2: 472}, 'average_moves': 73.019, 'max_moves': 169, 'average_depth': 73.019, 'draws': 0, 'average_available_moves_per_turn': 4.790424410085047}
+python analysis.py  161.63s user 2.18s system 99% cpu 2:44.03 total
 
+allora vedo che con il nuovo dataset minimax v2 vince contro v1, ribaltando quasi il bias. non male.
+per confermare dovrei fare 10k partite per abbassare il p value. 
+poi, dovrei introdurre delle valutazioni non più statiche bensì dinamiche nei miei pesi.
+
+Minimax v2 vs Minimax v1 (depth=2) results over 10000 games: {'winner_counts': {1: 5185, 2: 4815}, 'average_moves': 73.901, 'max_moves': 163, 'average_depth': 73.901, 'draws': 0, 'average_available_moves_per_turn': 4.782287113841491}
+python analysis.py  1610.97s user 11.52s system 99% cpu 27:06.51 total
+
+Minimax v2 vs Minimax v1 (depth=4) results over 1500 games: {'winner_counts': {1: 832, 2: 668}, 'average_moves': 43.488, 'max_moves': 129, 'average_depth': 43.488, 'draws': 0, 'average_available_moves_per_turn': 4.716458180034339}
+python analysis.py  1686.17s user 9.83s system 99% cpu 28:21.96 total
+
+['material_diff', 'mobility_diff', 'shooting_diff', 'pieces_in_danger_diff', 
+'safe_pieces_diff', 'avg_distance_to_enemy_diff', 'clustering_diff', 'board_centrality_diff']
+
+per v2 -> 
+    si potrebbero togliere le feature:
+    -avg_distance_to_enemy_diff (0.05)
+    - volendo quelle a <= 0.03 di weight
+__________________________________________________________________
 

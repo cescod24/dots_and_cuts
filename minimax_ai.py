@@ -22,6 +22,8 @@ def evaluate_position_v1(game_state: GameState, current_player: int,
                          weights, means, stds, intercept) -> float:
     """
     Evaluates a GameState according to fixed rules (version 1)
+    In this case "v1" means that this is the first evaluate function:
+    --> features, weight, logistic regression, linear score
     """
     score = 0
 
@@ -204,42 +206,42 @@ MINIMAX_VERSIONS = {
     "v2": {
         "evaluate_position": lambda state, player: evaluate_position_v1(
             state, player,
-            weights=MINIMAX_VERSIONS["v1"]["weights"],
-            means=MINIMAX_VERSIONS["v1"]["means"],
-            stds=MINIMAX_VERSIONS["v1"]["stds"],
-            intercept=MINIMAX_VERSIONS["v1"]["intercept"]
+            weights=MINIMAX_VERSIONS["v2"]["weights"],
+            means=MINIMAX_VERSIONS["v2"]["means"],
+            stds=MINIMAX_VERSIONS["v2"]["stds"],
+            intercept=MINIMAX_VERSIONS["v2"]["intercept"]
         ),
         "weights":  np.array([
-                    0.37511014,
-                    0.1517887,
-                    0.0344337,
-                    0.13282581,
-                    0.23723877,
-                    0.04105137,
-                    -0.21269454,
-                    0.07904447
+                    0.25779231,
+                    0.33878357,
+                    -0.02898758,
+                    0.02717691,##
+                    0.20366564,
+                    0.00593692,##
+                    -0.05804915,
+                    0.2017183
                     ]),
         "means":    np.array([
-                    0.11232675,
-                    1.19902684,
-                    0.12217635,
-                    -0.11828369,
-                    0.23061044,
-                    -0.41045414,
-                    -2.18466529,
-                    1.28327927
+                    -0.00836355,
+                    -0.0083293,
+                    -0.00945482,
+                    0.01096018,
+                    -0.01932372,
+                    0.00276476,
+                    0.01844728,
+                    -0.0431036 
                     ]),
         "stds":     np.array([
-                    0.53652077,
-                    2.06301329,
-                    0.37892051,
-                    0.36825379,
-                    0.64214112,
-                    1.14836881,
-                    4.07156428,
-                    1.9309659
+                    0.33630206,
+                    1.64375838,    
+                    0.20803943,
+                    0.19797178,
+                    0.39926138,
+                    0.77341806,
+                    2.44407136,
+                    1.74754301
                     ]),
-        "intercept": 0.3122567689286516
+        "intercept": -0.0990457519794764
     },
 }
 

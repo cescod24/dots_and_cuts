@@ -1,5 +1,12 @@
 import csv
-import math
+from dotscuts import GameState, setup_standard_game
+from ai_core import generate_legal_actions, execute_action
+from minimax_ai import minimax_best_move
+import random
+import statistics
+import sys
+import os
+
 # ---- Feature Extraction ----
 def compute_features(game_state, current_player):
     """
@@ -147,13 +154,6 @@ def compute_features(game_state, current_player):
         "clustering_diff": clustering_diff,
         "board_centrality_diff": board_centrality_diff,
     }
-from dotscuts import GameState, setup_standard_game
-from ai_core import generate_legal_actions, execute_action
-from minimax_ai import minimax_best_move
-import random
-import statistics
-import sys
-import os
 
 def block_print():
     sys.stdout = open(os.devnull, 'w')
@@ -384,7 +384,7 @@ def simulate_minimax_vs_greedy_game(game_state: GameState, starting_player: int,
 
 
 # ---- NEW: Simulate Minimax vs Minimax Game ----
-def simulate_minimax_vs_minimax_game(game_state: GameState, starting_player: int, depth: int, feature_log_file=None, root_player=1):
+def simulate_minimax_vs_minimax_game(game_state: GameState, starting_player: int, depth: int, version_p1="v1", version_p2="v1", feature_log_file=None, root_player=1):
     """
     Simulate a game where both players use minimax strategy (with given depth and version).
     If feature_log_file is given, log features for root_player at each of their turns.
@@ -397,8 +397,10 @@ def simulate_minimax_vs_minimax_game(game_state: GameState, starting_player: int
     feature_log = []
 
     def get_action(game_state, player):
-        # Use minimax_best_move with single version argument, default "v1"
-        return minimax_best_move(game_state, player, depth, version="v1")
+        if player == 1:
+            return minimax_best_move(game_state, player, depth, version=version_p1)
+        else:
+            return minimax_best_move(game_state, player, depth, version=version_p2)
 
     while True:
         game_over, winner = game_state.is_game_over()
@@ -447,7 +449,7 @@ def simulate_minimax_vs_minimax_game(game_state: GameState, starting_player: int
 
 
 # ---- NEW: Run Minimax vs Minimax Simulations ----
-def run_minimax_vs_minimax_simulations(num_simulations: int, depth: int, feature_log_file=None, root_player=1):
+def run_minimax_vs_minimax_simulations(num_simulations: int, depth: int, version_p1="v1", version_p2="v1", feature_log_file=None, root_player=1):
     """
     Run multiple simulations where both players use minimax strategy with given depth and version,
     alternating starting player each game.
@@ -464,7 +466,13 @@ def run_minimax_vs_minimax_simulations(num_simulations: int, depth: int, feature
         sim_state = setup_standard_game()
         starting_player = 1 if i % 2 == 0 else 2
         winner, moves, depth_turns, available_moves_per_turn, feature_log = simulate_minimax_vs_minimax_game(
-            sim_state, starting_player, depth, feature_log_file=None, root_player=root_player
+            sim_state,
+            starting_player,
+            depth,
+            version_p1=version_p1,
+            version_p2=version_p2,
+            feature_log_file=None,
+            root_player=root_player
         )
         results.append(winner)
         moves_list.append(moves)
@@ -712,22 +720,29 @@ def run_minimax_vs_greedy_simulations(num_simulations: int, depth: int, feature_
 
 if __name__ == "__main__":
     # Parameters
-    num_simulations = 1000
-    minimax_depth = 2
+    num_simulations = 1500
+    minimax_depth = 4
+    minimax_version_p1 = "v2"
+    minimax_version_p2 = "v1"
     WRITE_RESULTS_TO_FILE = False
     RESULTS_FILE_NAME = "results.txt"
-    feature_log_file = "" 
+    feature_log_file = "feature_log_v1.3.csv" 
     log_interval = 3  
     root_player = 1
 
     block_print()
     minimax_vs_minimax_results = run_minimax_vs_minimax_simulations(
-        num_simulations, minimax_depth, feature_log_file=None, root_player=root_player
+        num_simulations,
+        minimax_depth,
+        version_p1=minimax_version_p1,
+        version_p2=minimax_version_p2,
+        feature_log_file=None,
+        root_player=root_player
     )
     enable_print()
 
     # Print minimax vs minimax results
-    print(f"Minimax (depth={minimax_depth}) vs Minimax strategy results over {num_simulations} games:", {k: v for k, v in minimax_vs_minimax_results.items() if k != "feature_logs"})
+    print(f"Minimax {minimax_version_p1} vs Minimax {minimax_version_p2} (depth={minimax_depth}) results over {num_simulations} games:", {k: v for k, v in minimax_vs_minimax_results.items() if k != "feature_logs"})
 
     # Write features to CSV for root_player, with proper header only if file does not exist
     feature_logs = minimax_vs_minimax_results.get("feature_logs", [])
@@ -748,5 +763,5 @@ if __name__ == "__main__":
 
     if WRITE_RESULTS_TO_FILE:
         with open(RESULTS_FILE_NAME, "a") as f:
-            f.write(f"Minimax (depth={minimax_depth}) vs Minimax strategy results over {num_simulations} games: { {k: v for k, v in minimax_vs_minimax_results.items() if k != 'feature_logs'} }\n")
+            f.write(f"Minimax {minimax_version_p1} vs Minimax {minimax_version_p2} (depth={minimax_depth}) results over {num_simulations} games: { {k: v for k, v in minimax_vs_minimax_results.items() if k != 'feature_logs'} }\n")
             f.write("-" * 60 + "\n")
