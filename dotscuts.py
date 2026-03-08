@@ -249,7 +249,7 @@ class GameState:
         for piece in removed_pieces:
             if piece in self.pieces:
                 self.pieces.remove(piece)
-                print(f"Player {piece} was captured.")
+                #print(f"Player {piece} was captured.")
 
     def place_piece_with_tail(self, position_x, position_y, tail_x, tail_y, kind, player):
         """
@@ -494,22 +494,22 @@ class Piece:
                 continue
             elif z_start == -1 and z_end == -1:
                 if z_mid != -1:
-                    print("Failed shooting attempt (-1->-1)")
+                    #print("Failed shooting attempt (-1->-1)")
                     return False
             elif z_start == 0 and z_end == 0:
                 if z_mid not in (0, -1):
-                    print("Failed shooting attempt (0->0)")
+                    #print("Failed shooting attempt (0->0)")
                     return False
             elif z_start == 1 and z_end == 0:
                 if z_mid not in (0, -1):
-                    print("Failed shooting attempt (1->0)")
+                    #print("Failed shooting attempt (1->0)")
                     return False
             elif z_start == 0 and z_end == 1:
                 if z_mid not in (0, -1):
-                    print("Failed shooting attempt (0->1)")
+                    #print("Failed shooting attempt (0->1)")
                     return False
             else:
-                print("Failed shooting attempt (-1 -> 0, 0->-1, 1->-1, -1->1)")
+                #print("Failed shooting attempt (-1 -> 0, 0->-1, 1->-1, -1->1)")
                 return False
 
         return True
@@ -519,7 +519,7 @@ class Piece:
         Executes the shot, if it can.
         """
         if not self.can_shoot(new_x, new_y, game_state):
-            print("Invalid shoot action.")
+            #print("Invalid shoot action.")
             return
 
         start = (self.x, self.y)
@@ -624,12 +624,14 @@ class Piece:
 
 import random
 
-def setup_standard_game():
+def setup_standard_game(seed=None):
     """
-    Create a 9x9 board, place a random number of towers (6-10), bunkers (6-10), and lakes (3-5) in unique positions (no overlaps),
+    Create a 9x9 board, place a random number of towers, bunkers, and lakes in unique positions,
     with lakes never in the corners. Keeps player pieces in fixed positions.
-    Returns a ready-to-use GameState.
+    If seed is provided, randomness will be reproducible.
     """
+    if seed is not None:
+        random.seed(seed)
     board = Board(9)
     size = 9
     cell_coords = [(x, y) for x in range(size-1) for y in range(size-1)]

@@ -188,3 +188,54 @@ per v2 ->
     - volendo quelle a <= 0.03 di weight
 __________________________________________________________________
 
+allora sto approcciando il problema con il Reinforcement Learning (RL).
+Per ora se vinco prendo 1 se perdo prendo -1. La rete neurale è:
+
+self.net = nn.Sequential(
+            nn.Linear(input_dim, 256),
+            nn.ReLU(),
+            nn.Linear(256, 128),
+            nn.ReLU(),
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            nn.Linear(64, 1)   # Output Q-value
+        )
+
+input_dim è un array con 7 * N * N + 6 dimensioni. 
+Per lo standard game: 7 * 9 * 9 + 6 = 573
+
+return np.array([
+        piece_x,
+        piece_y,
+        target_x,
+        target_y,
+        is_move,
+        is_shoot
+    ], dtype=float)
+
+    +
+
+state_vector = np.concatenate([
+        my_pieces.flatten(),
+        enemy_pieces.flatten(),
+        orth.flatten(),
+        diag.flatten(),
+        z.flatten(),
+        edge_count.flatten(),
+        arrival_layer.flatten(),
+        mobility.flatten()
+    ], dtype=float)
+
+aggiunto anche epsilon greedy con  < 0.1
+senza greedy: mosse medie 17
+con greedy: mosse medie 24
+tuttavia mi accorgo che già da 1000 partite player 1 domina.
+da ricordare però che RL è fatto sempre in base A CHI MUOVE.
+NON è minimax che ha un root player, ma piuttosto è una funzione che cerca di massimizzarsi:
+"Qual è la mossa che massimizza il valore di questa funzione (Q) rispetto A CHI MUOVE?"
+infatti lo state vector è sempre dalla prospettiva del giocatore e non ha p1 e p2, 
+ma "my pieces" e "enemy pieces".
+
+da fare ora: capire bene come funziona e allenare RL
+ affinché possa giocare contro altri modelli
+__________________________________________________________________

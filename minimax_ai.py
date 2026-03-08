@@ -1,22 +1,9 @@
 from dotscuts import GameState
-from ai_core import Action, generate_legal_actions, execute_action
+from ai_core import Action, generate_legal_actions, generate_all_actions, execute_action
 import random
 
 import pandas as pd
 import numpy as np
-
-def generate_all_actions(game_state: GameState, current_player: int) -> list:
-    """
-    Generates all legal actions for a player
-    """
-    player_pieces = [p for p in game_state.pieces if p.player == current_player]
-    all_actions = []
-    for piece in player_pieces:
-        actions = generate_legal_actions(game_state, piece)
-        all_actions.extend(actions)
-    
-    return all_actions
-
 
 def evaluate_position_v1(game_state: GameState, current_player: int,
                          weights, means, stds, intercept) -> float:
