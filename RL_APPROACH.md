@@ -648,6 +648,56 @@ This allows:
 
 ## Known Issues & Fixes
 
+### Issue: V2 Checkpoints Trained with Wrong State Dimensions
+
+**Status**: FIXED in bot_player.py (auto-adaptive loading)
+
+**Problem**:
+- RL v2 checkpoints were saved with input_dim=654 (incorrect) instead of 978
+- This caused PyTorch state_dict loading errors: "size mismatch for net.0.weight"
+- Root cause: RL v2 training code used `state_to_vector()` (648 dims) instead of `state_to_vector_v2()` (972 dims)
+
+**Symptom**:
+```
+Error(s) in loading state_dict for QNetV2:
+  size mismatch for net.0.weight: copying a param with shape torch.Size([512, 654])
+  from checkpoint, the shape in current model is torch.Size([512, 978])
+```
+
+**Solution Implemented**:
+The `bot_player.py` RLBot class now:
+1. Auto-detects version from checkpoint metadata (v1/v2 field)
+2. Detects actual input dimensions from network weights (ignores expected dims)
+3. Selects state vector function based on actual dims, not metadata
+4. Provides detailed debug output showing the mismatch and workaround being used
+
+**How It Works**:
+```python
+# Bot loads v2 checkpoint with 654 dims
+input_dim = 654  # Actual from checkpoint
+state_dim = 654 - 6 = 648
+self._state_fn = state_to_vector  # Use v1 state function (648 dims)
+# Network created with input_dim=654, loads checkpoint successfully
+```
+
+**Current Behavior**:
+- ✅ V1 checkpoints load correctly (input_dim=654, state_to_vector)
+- ✅ V2 legacy checkpoints load correctly (input_dim=654, state_to_vector)
+  - Warning message displayed about mismatch
+  - Bot functions correctly despite not using enhanced features
+- ❌ V2 checkpoints DON'T use tactical features (972-dim state)
+
+**Recommendation**:
+Retrain RL v2 with corrected code to generate proper 978-dim checkpoints:
+```bash
+rm -rf RL_approach/checkpoints_v2/*.pt  # Delete old checkpoints
+python3 RL_approach/rl_training_v2.py --episodes 5000  # Retrain with correct state_to_vector_v2
+```
+
+This will create new checkpoints that properly utilize the 4 tactical layers.
+
+---
+
 ### Bug: Z-Index Transposition in can_shoot()
 
 **Location**: `core/dotscuts.py`, lines 484, 485, 490 (FIXED)
