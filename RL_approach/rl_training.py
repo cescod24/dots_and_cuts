@@ -1,16 +1,30 @@
 """
-RL Training - FIXED VERSION
-============================
+RL Training - FIXED VERSION with Resume Support
+================================================
 Fixes the loss convergence issue by implementing PROPER Bellman Equation
 with LEGAL ACTIONS, not random actions in continuous space.
 
 Key Fix: ExperienceReplayBuffer now stores next_legal_action_vectors
 so train_batch() can calculate max Q-value over LEGAL actions,
 not random continuous-space actions (which was the bug!)
+
+Usage:
+  # Train from scratch (default 5000 episodes)
+  python3 rl_training.py
+
+  # Train for custom number of episodes
+  python3 rl_training.py --episodes 10000
+
+  # Resume from a checkpoint and continue to 5000 episodes
+  python3 rl_training.py --resume checkpoints/model_ep2000.pt
+
+  # Resume from checkpoint and continue to 8000 episodes
+  python3 rl_training.py --resume checkpoints/model_ep2000.pt --episodes 8000
 """
 
 import sys
 import os
+import argparse
 
 _base = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(_base, '..', 'core'))
@@ -260,8 +274,14 @@ def run_self_play_episode(agent, replay_buffer, starting_player, epsilon=0.1):
     return total_turns, winner
 
 
-def run_training_loop(total_episodes=5000):
-    """Training loop with FIXED Bellman equation."""
+def run_training_loop(total_episodes=5000, resume_path=None):
+    """
+    Training loop with FIXED Bellman equation.
+
+    Args:
+        total_episodes: Target number of episodes to train
+        resume_path: Optional path to checkpoint to resume from
+    """
 
     print("="*80)
     print("STARTING RL TRAINING (FIXED - PROPER BELLMAN WITH LEGAL ACTIONS)")
@@ -293,10 +313,23 @@ def run_training_loop(total_episodes=5000):
     EPSILON_DECAY = 0.995
 
     epsilon = EPSILON_START
+    start_episode = 1
 
-    print(f"\n[TRAINING] {total_episodes} episodes...\n")
+    # Resume from checkpoint if requested
+    if resume_path and os.path.exists(resume_path):
+        ckpt = torch.load(resume_path, map_location="cpu", weights_only=False)
+        agent.q_network.load_state_dict(ckpt["q_network_state"])
+        agent.target_network.load_state_dict(ckpt["target_network_state"])
+        epsilon = ckpt.get("epsilon", EPSILON_START)
+        start_episode = ckpt.get("episode", 0) + 1
+        print(f"  Resumed from {resume_path} (ep {start_episode-1}, eps={epsilon:.4f})")
 
-    for episode in range(1, total_episodes + 1):
+    print(f"\n  Training episodes {start_episode} -> {total_episodes}")
+    print(f"  Checkpoints -> {checkpoint_dir}/")
+    print(f"  CSV log     -> training_log.csv")
+    print()
+
+    for episode in range(start_episode, total_episodes + 1):
         starting_player = 1 if episode % 2 == 1 else 2
         total_turns, winner = run_self_play_episode(
             agent, replay_buffer, starting_player, epsilon=epsilon
@@ -344,4 +377,16 @@ def run_training_loop(total_episodes=5000):
 
 
 if __name__ == "__main__":
-    agent, metrics = run_training_loop(total_episodes=5000)
+    """
+    Usage:
+      python3 rl_training.py                                              # Train 5000 from scratch
+      python3 rl_training.py --episodes 10000                             # Train 10000 from scratch
+      python3 rl_training.py --resume checkpoints/model_ep2000.pt         # Resume from ep 2000, go to 5000
+      python3 rl_training.py --resume checkpoints/model_ep2000.pt --episodes 8000  # Resume from ep 2000, go to 8000
+    """
+    parser = argparse.ArgumentParser(description="RL Training V1 for Dots & Cuts")
+    parser.add_argument("--episodes", type=int, default=5000, help="Total episodes to train (default: 5000)")
+    parser.add_argument("--resume", type=str, default=None, help="Path to checkpoint to resume from")
+    args = parser.parse_args()
+
+    agent, metrics = run_training_loop(total_episodes=args.episodes, resume_path=args.resume)
