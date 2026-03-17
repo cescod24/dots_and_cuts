@@ -10,7 +10,11 @@ not random continuous-space actions (which was the bug!)
 """
 
 import sys
-sys.path.insert(0, '../core')  # Import from core/
+import os
+
+_base = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(_base, '..', 'core'))
+sys.path.insert(0, os.path.join(_base, '..'))
 
 from dotscuts import GameState, setup_standard_game
 from ai_core import Action, generate_all_actions, execute_action, state_to_vector, action_to_vector
@@ -22,7 +26,6 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import copy
-import os
 
 # ============================================================================
 # EXPERIENCE REPLAY BUFFER - FIXED
@@ -34,7 +37,7 @@ class ExperienceReplayBuffer:
     ⭐ KEY FIX: next_legal_action_vectors is CRUCIAL for correct Bellman equation!
     """
 
-    def __init__(self, max_size=5000):
+    def __init__(self, max_size=10000):
         self.max_size = max_size
         self.buffer = []
 
@@ -327,6 +330,7 @@ def run_training_loop(total_episodes=5000):
                 'q_network_state': agent.q_network.state_dict(),
                 'target_network_state': agent.target_network.state_dict(),
                 'epsilon': epsilon,
+                'version': 'v1',
             }, checkpoint_path)
             print(f"[CHECKPOINT] Saved to {checkpoint_path}")
 

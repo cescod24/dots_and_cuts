@@ -7,121 +7,170 @@ A comprehensive platform for training, testing, and playing the Dots & Cuts game
 ```
 dots_and_cuts/
 ├── core/                      # Game logic (immutable)
-│   ├── dotscuts.py           # Game implementation
+│   ├── dotscuts.py           # Game implementation (FIXED: z-index bug)
 │   └── ai_core.py            # State/action utilities
 │
-├── RL_approach/              # Training pipeline
-│   ├── rl_training.py        # Main training loop (FIXED Bellman)
+├── RL_approach/              # Training pipeline with versioned models
+│   ├── rl_training.py        # V1: Standard Deep Q-Learning
+│   ├── rl_training_v2.py     # V2: Double DQN with enhanced rewards
 │   ├── training_metrics.py   # Metrics tracking & logging
 │   ├── analyze_training.py   # Post-training visualization
-│   ├── experiment_cli.py     # CLI for experiments
-│   ├── training_log.csv      # Training output
-│   └── checkpoints/          # Saved models
+│   ├── training_log.csv      # V1 training output
+│   ├── training_log_v2.csv   # V2 training output
+│   ├── checkpoints/          # V1 saved models (weak/medium/strong)
+│   ├── checkpoints_v2/       # V2 saved models (weak/medium/strong)
+│   └── README_RL.md          # RL system documentation
+│
+├── minimax_approach/         # Classical minimax solver
+│   └── minimax_ai.py         # V1 and V2 evaluation functions
 │
 ├── pygame_ui/                # Interactive game
-│   ├── main_game.py          # Main game interface
-│   ├── game_display.py       # Board rendering
-│   ├── bot_player.py         # Bot implementations
-│   └── custom_setup.py       # Game setup builder
+│   ├── main_game.py          # Game loop with toggle controls
+│   ├── game_display.py       # Dynamic board rendering
+│   ├── bot_player.py         # Bot factory (all versions)
+│   ├── mode_selection.py     # Menu system with version selection
+│   └── QUICKSTART.md         # UI usage guide
 │
+├── dotscuts.py               # Game logic (root, mirrored to core/)
+├── PROJECT_SUMMARY.md        # Detailed completion report
 └── README.md                 # This file
 ```
 
-## Key Implementation: Deep Q-Learning (FIXED)
+## Key Implementation: Deep Q-Learning & Minimax Solvers (FIXED)
 
-### The Bug That Was Fixed
+### Critical Bug Fixed: Z-Index Transposition in Shooting Validation
 
-OLD CODE (BROKEN):
+**Location**: `dotscuts.py` lines 484, 485, 490 (and `core/dotscuts.py`)
+
+**Problem**: The `can_shoot()` method accessed z-value grid with `z[x][y]` instead of the correct `z[y][x]` convention used throughout the codebase.
+
 ```python
-def _estimate_best_q(self, state):
-    q_values = []
-    for _ in range(10):
-        random_action = np.random.randn(6) * 0.1  # ❌ RANDOM ACTIONS!
-        q_val = self.target_network(concat(state, random_action))
-        q_values.append(q_val)
-    return max(q_values)  # ❌ MAX OF INVALID ACTIONS
+# BEFORE (WRONG - allowed illegal shots like -1→0):
+z_start = game_state.board.z[self.x][self.y]
+z_end = game_state.board.z[target_x][target_y]
+z_mid = game_state.board.z[current_x][current_y]
+
+# AFTER (CORRECT - enforces actual shooting rules):
+z_start = game_state.board.z[self.y][self.x]
+z_end = game_state.board.z[target_y][target_x]
+z_mid = game_state.board.z[current_y][current_x]
 ```
 
-Problem: Calculated Q-target using RANDOM continuous-space actions, not legal game moves.
-Result: Loss oscillates, model doesn't learn.
+**Impact**: Bots now properly enforce z-value shooting rules. Shots from -1 to 0 are correctly rejected as illegal.
 
-NEW CODE (FIXED):
-```python
-# Store legal actions in buffer
-replay_buffer.add(..., next_legal_action_vectors=legal_actions)
+**Note**: Existing RL v1 models were trained with this bug active, so their learned strategies are based on incorrect validation. Consider retraining after this fix.
 
-# During training, use ONLY legal actions
-for legal_action_vec in legal_action_vectors:
-    q_val = self.target_network(concat(state, legal_action_vec))
-    q_values.append(q_val)
-best_next_q = max(q_values)  # ✓ MAX OF REAL ACTIONS
+### Reinforcement Learning: Two Versions
 
-# Proper Bellman equation
-target = reward + gamma * best_next_q
-```
+**Version 1 (Standard Deep Q-Learning)**
+- Network: 256-128-64-1
+- Hyperparameters: LR=0.0005, γ=0.95, ε_decay=0.995
+- Buffer size: 5000
+- Batch size: 32
+- Simple reward: +1 win, -1 loss, 0 in-game
+- Checkpoints: `RL_approach/checkpoints/`
 
-Result: Loss converges properly, model learns strategies.
+**Version 2 (Enhanced Double DQN)**
+- Network: 512-256-128-64-1 (larger)
+- Hyperparameters: LR=0.0005, γ=0.95, ε_decay=0.997 (slower decay)
+- Buffer size: 10000 (larger)
+- Batch size: 64 (larger)
+- Shaped rewards:
+  - +0.4 per capture, -0.4 per loss
+  - Mobility bonus: 0.05 × clamped move count difference
+  - Shoot threat bonus: 0.1 × min(shoot actions available, 2)
+- Double DQN: Uses two networks to reduce overestimation
+- Loss function: Huber (robust to outliers)
+- Gradient clipping: max_norm=1.0
+- Checkpoints: `RL_approach/checkpoints_v2/`
+
+**Checkpoint Tiers**: Each version has weak/medium/strong models:
+- Weak: ~1000-2000 episodes
+- Medium: ~3000-4000 episodes  
+- Strong: ~5000+ episodes
+
+### Minimax Solver: Two Versions
+
+**Version 1**: Logistic regression evaluation with standard alpha-beta pruning
+**Version 2**: Enhanced evaluation function with deeper analysis
+
+Both support configurable search depth (2-6 plies).
 
 ## Quick Start
 
 ```bash
-# 1. Train a model (5000 episodes)
+# 1. Train RL V1 (standard)
 cd RL_approach/
-python3 rl_training.py
+python3 rl_training.py --episodes 5000
 
-# 2. Analyze results
-python3 analyze_training.py
+# 2. Train RL V2 (enhanced - stronger bot)
+python3 rl_training_v2.py --episodes 5000
 
-# 3. Play against the bot
+# 3. Analyze both training runs
+python3 analyze_training.py  # Creates visualization for V1
+# (For V2, modify the script to read training_log_v2.csv)
+
+# 4. Play against bot (menu lets you choose version/tier)
 cd ../pygame_ui/
-python3 main_game.py --mode pvbot --bot-model ../RL_approach/checkpoints/model_ep5000.pt
+python3 main_game.py
 
-# 4. Experiment management
-cd ../RL_approach/
-python3 experiment_cli.py list
-python3 experiment_cli.py test checkpoints/model_ep5000.pt --games 10
-python3 experiment_cli.py compare checkpoints/model_ep1000.pt checkpoints/model_ep5000.pt
+# 5. Bot options in menu:
+#    - Minimax v1 (fast, depth 3-6)
+#    - Minimax v2 (stronger analysis)
+#    - RL v1 weak/medium/strong (standard DQN)
+#    - RL v2 weak/medium/strong (enhanced DQN)
 ```
 
 ## Training Output
 
-After running `rl_training.py`, you get:
+Both RL versions produce similar outputs:
 
+**Version 1 (Standard)**
 1. **training_log.csv**: Full metrics per episode
-   - episode, p1_wins, p2_wins, draws, game_length, epsilon, loss, q_value_mean
-   - Rolling averages (50-episode window)
-   - Ready for pandas/R analysis
-
 2. **training_analysis.png**: 4-panel visualization
-   - Win Rate Trend: Shows if model learns
-   - Game Length Evolution: Shows strategic complexity
-   - Loss Convergence: Shows if neural network learns
-   - Fairness Check: Shows if balanced between players
+3. **checkpoints/model_epXXXX.pt**: Weak/medium/strong tiers
 
-3. **checkpoints/**: Saved models
-   - model_ep0.pt, model_ep500.pt, model_ep1000.pt, ...
-   - Use for testing, comparing, resuming
+**Version 2 (Enhanced)**
+1. **training_log_v2.csv**: Enhanced metrics with reward shaping
+2. **checkpoints_v2/model_epXXXX.pt**: Weak/medium/strong tiers
+
+Ready for pandas/R analysis with columns:
+- episode, p1_wins, p2_wins, draws, game_length, epsilon, loss, q_value_mean
+- rolling_p1_wr, rolling_p2_wr, rolling_draw_wr, rolling_game_length, rolling_loss
 
 ## Game Modes
 
 ### Player vs Player
 ```bash
-python3 main_game.py --mode pvp
+python3 main_game.py
+# Menu → Select "Player vs Player" → Choose player sides → Select map
 ```
 Local 1v1 game between two human players.
 
 ### Player vs Bot
 ```bash
-python3 main_game.py --mode pvbot --bot-model ../RL_approach/checkpoints/model_ep5000.pt
+python3 main_game.py
+# Menu → Select "Player vs Bot" → Choose bot type and tier → Choose sides → Select map
 ```
-Human (Player 1) vs trained bot (Player 2).
-Bot's top 3 moves displayed with Q-value scores.
+Human vs bot (4 bot types with 3 tiers each):
+- Minimax v1 (classical solver)
+- Minimax v2 (stronger evaluation)
+- RL v1 weak/medium/strong (standard DQN)
+- RL v2 weak/medium/strong (enhanced DQN)
+
+Bot displays top candidate moves with analysis.
 
 ### Bot vs Bot
-```bash
-python3 main_game.py --mode botbot --bot-model ../RL_approach/checkpoints/model_ep5000.pt
-```
-Watch two agents play each other.
+Select any two bots to watch them play (visualization for learning analysis).
+
+### Game Controls
+- **ESC**: Go back to menu
+- **G**: Toggle unvisited edge grid (default: OFF)
+- **Z**: Toggle z-value vertex hints (default: OFF)
+- **B**: Toggle bot thinking display (default: ON)
+- **U**: Undo last move
+- **R**: Restart current game
+- **Q**: Return to menu
 
 ## Research Workflow
 

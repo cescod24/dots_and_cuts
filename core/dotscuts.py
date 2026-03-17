@@ -481,13 +481,13 @@ class Piece:
         step_y = 0 if dy == 0 else dy // abs(dy)
 
         current_x, current_y = self.x, self.y
-        z_start = game_state.board.z[self.x][self.y]
-        z_end = game_state.board.z[target_x][target_y]
+        z_start = game_state.board.z[self.y][self.x]
+        z_end = game_state.board.z[target_y][target_x]
 
         while (current_x, current_y) != (target_x, target_y):
             current_x += step_x
             current_y += step_y
-            z_mid = game_state.board.z[current_x][current_y]
+            z_mid = game_state.board.z[current_y][current_x]
 
             # z rules
             if z_start == 1 and z_end == 1:

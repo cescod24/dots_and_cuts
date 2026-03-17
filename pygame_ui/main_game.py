@@ -1,396 +1,335 @@
 """
-Main Game UI
-============
-Interactive PyGame interface for playing Dots & Cuts.
-Supports:
-1. Player vs Player (1v1 local)
-2. Player vs Bot (using trained RL model)
-3. Bot vs Bot (watch two bots play)
+Dots & Cuts - Main Game
+========================
+Entry point for the PyGame interface.
+
+Launch:
+    python main_game.py
+
+Flow:
+    1. Mode selection menu  (mode_selection.ModeSelector)
+    2. Game loop            (GameUI)
+    3. On quit / restart -> back to menu
 """
 
 import pygame
 import sys
 import os
 
-sys.path.insert(0, '../core')
+# Ensure core/ and project root are importable
+_base = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(_base, "..", "core"))
+sys.path.insert(0, os.path.join(_base, ".."))
 
 from dotscuts import setup_standard_game
-from ai_core import execute_action, generate_all_actions
+from ai_core import execute_action
 from game_display import GameDisplay
-from bot_player import BotPlayer
+from bot_player import create_bot
+from custom_setup import PrebuiltSetups
+from mode_selection import ModeSelector, GameConfig
 
 
-class GameMode:
-    PLAYER_VS_PLAYER = 1
-    PLAYER_VS_BOT = 2
-    BOT_VS_BOT = 3
+# ---------------------------------------------------------------------------
+# Map builder helper
+# ---------------------------------------------------------------------------
+def build_game_state(config: GameConfig):
+    """Create a GameState from the chosen map name."""
+    if config.map_name == "standard":
+        return setup_standard_game()
+    elif config.map_name == "balanced":
+        return PrebuiltSetups.balanced_9x9()
+    elif config.map_name == "empty":
+        return PrebuiltSetups.empty_board()
+    elif config.map_name == "small_5x5":
+        return PrebuiltSetups.small_5x5()
+    else:
+        return setup_standard_game()
 
 
+# ---------------------------------------------------------------------------
+# Main game UI
+# ---------------------------------------------------------------------------
 class GameUI:
     """
-    Main game interface.
-    Handles:
-    - Piece selection and movement
-    - Board display
-    - Turn management
-    - Bot interactions
+    Interactive game loop.
+    Handles piece selection, move execution, bot turns, undo, and rendering.
     """
 
-    def __init__(self, game_mode=GameMode.PLAYER_VS_PLAYER, bot_model_path=None):
-        """
-        Initialize the game UI.
+    def __init__(self, config: GameConfig):
+        self.config = config
+        self.game_state = build_game_state(config)
 
-        Args:
-            game_mode: GameMode.PLAYER_VS_PLAYER, PLAYER_VS_BOT, or BOT_VS_BOT
-            bot_model_path: Path to trained bot model (required for bot modes)
-        """
-        pygame.init()
+        board_sz = self.game_state.board.size
+        self.display = GameDisplay(board_size=board_sz)
 
-        self.game_mode = game_mode
-        self.bot_model_path = bot_model_path
+        # Bot setup
         self.bot = None
+        self.bot_player = None  # which player number the bot controls
+        if config.mode == "pvbot":
+            self.bot = create_bot(config)
+            # Bot plays the opposite side of the human
+            self.bot_player = 2 if config.human_player == 1 else 1
 
-        # Load bot if needed
-        if game_mode in [GameMode.PLAYER_VS_BOT, GameMode.BOT_VS_BOT]:
-            if not bot_model_path or not os.path.exists(bot_model_path):
-                raise FileNotFoundError(f"Bot model not found: {bot_model_path}")
-            self.bot = BotPlayer(bot_model_path, device='cpu')
-            print(f"[BOT LOADED] {self.bot}")
-
-        # Initialize game
-        self.game_state = setup_standard_game()
+        # State
         self.current_player = 1
-
-        # Display
-        self.display = GameDisplay(width=1200, height=900)
-
-        # UI State
         self.selected_piece = None
         self.legal_moves = set()
         self.legal_shoots = set()
         self.show_bot_thinking = True
+        self.show_grid = False       # unvisited edges hidden by default
+        self.show_z_hints = False    # z-value vertex colours hidden by default
         self.game_over = False
         self.winner = None
         self.message = ""
-        self.message_time = 0
+        self.message_timer = 0
+        self._bot_top_cache = None  # cached top-k for display
 
-    def get_legal_targets(self, piece):
-        """
-        Get all legal move and shoot targets for a piece.
+    # ----- helpers -----
 
-        Returns:
-            (legal_moves_set, legal_shoots_set)
-        """
-        legal_moves = set()
-        legal_shoots = set()
+    def _is_bot_turn(self) -> bool:
+        return self.bot is not None and self.current_player == self.bot_player
 
-        # Check all possible moves
+    def _show(self, msg, frames=180):
+        self.message = msg
+        self.message_timer = frames
+
+    def _get_legal_targets(self, piece):
+        moves, shoots = set(), set()
         if piece.kind == "orthogonal":
-            directions = [(0, 1), (0, -1), (1, 0), (-1, 0)]
-        else:  # diagonal
-            directions = [(1, 1), (1, -1), (-1, 1), (-1, -1)]
-
-        for dx, dy in directions:
-            new_x, new_y = piece.x + dx, piece.y + dy
-            if piece.can_move(new_x, new_y, self.game_state):
-                legal_moves.add((new_x, new_y))
-
-        # Check all possible shoots
-        for opponent_piece in self.game_state.pieces:
-            if opponent_piece.player != piece.player:
-                if piece.can_shoot(opponent_piece.x, opponent_piece.y, self.game_state):
-                    legal_shoots.add((opponent_piece.x, opponent_piece.y))
-
-        return legal_moves, legal_shoots
-
-    def select_piece(self, piece):
-        """
-        Select a piece (highlights it and shows legal moves).
-        """
-        if piece.player != self.current_player:
-            self.show_message("Not your piece!")
-            return
-
-        self.selected_piece = piece
-        self.legal_moves, self.legal_shoots = self.get_legal_targets(piece)
-        self.show_message(f"Selected {piece.kind} at ({piece.x},{piece.y}). Click a target.")
-
-    def move_piece(self, target_x, target_y):
-        """
-        Attempt to move selected piece to target.
-        """
-        if not self.selected_piece:
-            self.show_message("No piece selected!")
-            return False
-
-        if (target_x, target_y) in self.legal_moves:
-            self.selected_piece.move(target_x, target_y, self.game_state)
-            self.show_message(f"Moved {self.selected_piece.kind}")
-            self.end_turn()
-            return True
-
-        elif (target_x, target_y) in self.legal_shoots:
-            self.selected_piece.shoot(target_x, target_y, self.game_state)
-            self.show_message(f"Shot at ({target_x},{target_y})")
-            self.end_turn()
-            return True
-
+            dirs = [(0,1),(0,-1),(1,0),(-1,0)]
         else:
-            self.show_message("Invalid target!")
-            return False
+            dirs = [(1,1),(1,-1),(-1,1),(-1,-1)]
+        for dx, dy in dirs:
+            nx, ny = piece.x + dx, piece.y + dy
+            if piece.can_move(nx, ny, self.game_state):
+                moves.add((nx, ny))
+        for other in self.game_state.pieces:
+            if other.player != piece.player:
+                if piece.can_shoot(other.x, other.y, self.game_state):
+                    shoots.add((other.x, other.y))
+        return moves, shoots
 
-    def end_turn(self):
-        """
-        End current player's turn and check for game over.
-        """
+    # ----- turn logic -----
+
+    def _select_piece(self, piece):
+        if piece.player != self.current_player:
+            self._show("Not your piece!")
+            return
+        self.selected_piece = piece
+        self.legal_moves, self.legal_shoots = self._get_legal_targets(piece)
+        kind = piece.kind.capitalize()
+        self._show(f"Selected {kind} at ({piece.x},{piece.y})")
+
+    def _try_action(self, tx, ty):
+        if not self.selected_piece:
+            return
+        if (tx, ty) in self.legal_moves:
+            self.selected_piece.move(tx, ty, self.game_state)
+            self._show(f"Moved to ({tx},{ty})")
+            self._end_turn()
+        elif (tx, ty) in self.legal_shoots:
+            self.selected_piece.shoot(tx, ty, self.game_state)
+            self._show(f"Shot to ({tx},{ty})")
+            self._end_turn()
+        else:
+            self._show("Invalid target!")
+
+    def _end_turn(self):
         self.selected_piece = None
         self.legal_moves = set()
         self.legal_shoots = set()
+        self._bot_top_cache = None
 
-        # Check game over
-        game_over, winner = self.game_state.is_game_over()
-
-        if game_over:
+        over, winner = self.game_state.is_game_over()
+        if over:
             self.game_over = True
             self.winner = winner
-            self.show_message(f"GAME OVER! Player {winner} wins!")
+            self._show(f"Game over! Player {winner} wins!")
             return
 
-        # Switch player
         self.current_player = 2 if self.current_player == 1 else 1
 
-        # If bot's turn, execute bot move
-        if self._is_bot_turn():
-            self.execute_bot_move()
-
-    def execute_bot_move(self):
-        """
-        Let the bot execute its best move.
-        """
-        if not self.bot or not self._is_bot_turn():
+    def _do_bot_turn(self):
+        if not self.bot or not self._is_bot_turn() or self.game_over:
             return
 
         action = self.bot.get_best_action(self.game_state, self.current_player)
-
         if action:
+            desc = self.bot.action_to_readable_string(action)
             execute_action(self.game_state, action)
-            action_str = self.bot.action_to_readable_string(action)
-            self.show_message(f"Bot played: {action_str}")
-            self.end_turn()
+            self._show(f"Bot: {desc}")
         else:
-            # No legal moves
-            self.show_message("Bot has no legal moves!")
-            self.end_turn()
+            self._show("Bot has no legal moves!")
+        self._end_turn()
 
-    def _is_bot_turn(self) -> bool:
-        """
-        Check if it's the bot's turn.
-        """
-        if self.game_mode == GameMode.PLAYER_VS_PLAYER:
-            return False
-        elif self.game_mode == GameMode.PLAYER_VS_BOT:
-            return self.current_player == 2  # Bot is player 2
-        elif self.game_mode == GameMode.BOT_VS_BOT:
-            return True  # Always bot's turn
-        return False
-
-    def show_message(self, msg: str, duration: float = 60):
-        """
-        Display a message at the bottom of screen.
-        """
-        self.message = msg
-        self.message_time = duration
-
-    def handle_click(self, pos):
-        """
-        Handle mouse click on the board.
-        """
-        if self.game_over:
-            self.show_message("Game is over! Press 'R' to restart or 'Q' to quit.")
+    def _refresh_bot_thinking(self):
+        """Cache the bot's top-k evaluation for the *human* player's view."""
+        if not self.bot or not self.show_bot_thinking:
+            self._bot_top_cache = None
             return
+        if self.game_over:
+            return
+        # Show what the bot would do from the current player's perspective
+        # (useful to see the bot's evaluation while it's the human's turn)
+        if not self._is_bot_turn():
+            try:
+                top = self.bot.get_top_k_actions(self.game_state, self.bot_player, k=3)
+                self._bot_top_cache = [
+                    (self.bot.action_to_readable_string(a), s, b)
+                    for a, s, b in top
+                ]
+            except Exception:
+                self._bot_top_cache = None
+        else:
+            self._bot_top_cache = None
 
-        if self._is_bot_turn():
-            self.show_message("Waiting for bot...")
+    # ----- event handling -----
+
+    def _handle_click(self, pos):
+        if self.game_over or self._is_bot_turn():
             return
 
         vertex = self.display.pixel_to_vertex(pos[0], pos[1])
-
         if vertex is None:
             return
 
         vx, vy = vertex
+        my_pieces = [p for p in self.game_state.pieces
+                     if p.x == vx and p.y == vy and p.player == self.current_player]
 
-        # Find piece at this vertex
-        piece_at_target = None
-        for piece in self.game_state.pieces:
-            if piece.x == vx and piece.y == vy and piece.player == self.current_player:
-                piece_at_target = piece
-                break
-
-        if piece_at_target:
-            # Clicked on own piece - select it
-            self.select_piece(piece_at_target)
+        if my_pieces:
+            # Cycle through pieces at this vertex
+            if (self.selected_piece and self.selected_piece.x == vx
+                    and self.selected_piece.y == vy and self.selected_piece in my_pieces):
+                idx = my_pieces.index(self.selected_piece)
+                nxt = my_pieces[(idx + 1) % len(my_pieces)]
+                self._select_piece(nxt)
+            else:
+                self._select_piece(my_pieces[0])
         elif self.selected_piece:
-            # Clicked on target
-            self.move_piece(vx, vy)
+            self._try_action(vx, vy)
         else:
-            self.show_message("Click on one of your pieces first!")
+            self._show("Click on one of your pieces first!")
 
-    def draw(self):
+    # ----- main loop -----
+
+    def run(self) -> str:
         """
-        Render the current game state.
-        """
-        # Draw board
-        self.display.draw_board(self.game_state)
-
-        # Draw pieces with highlights
-        self.display.draw_pieces(
-            self.game_state,
-            selected_piece=self.selected_piece,
-            legal_moves=self.legal_moves,
-            legal_shoots=self.legal_shoots
-        )
-
-        # Draw bot thinking (top-right corner)
-        if self.show_bot_thinking and self.bot and self.current_player == 1:
-            top_moves = self.bot.get_top_k_actions(self.game_state, self.current_player, k=3)
-            if top_moves:
-                top_3_strings = [
-                    (self.bot.action_to_readable_string(action), q_val, is_best)
-                    for action, q_val, is_best in top_moves
-                ]
-                self.display.draw_bot_thinking(top_3_strings, position=(self.display.width - 350, 20))
-
-        # Draw UI
-        game_info = ""
-        if self._is_bot_turn():
-            game_info = "[BOT THINKING]"
-        elif self.selected_piece:
-            game_info = f"Moves: {len(self.legal_moves)}, Shoots: {len(self.legal_shoots)}"
-
-        self.display.draw_ui_bottom(
-            self.current_player,
-            game_info=game_info
-        )
-
-        # Draw message
-        if self.message and self.message_time > 0:
-            msg_surface = self.display.font_medium.render(self.message, True, (200, 50, 50))
-            self.display.screen.blit(msg_surface, (20, self.display.height - 80))
-            self.message_time -= 1
-
-        # Update display
-        self.display.update()
-
-    def handle_events(self) -> bool:
-        """
-        Handle pygame events.
-
+        Run the game loop.
         Returns:
-            False if user quit, True otherwise
+            "menu"  -> go back to menu
+            "quit"  -> exit application
         """
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                return False
-
-            elif event.type == pygame.MOUSEBUTTONDOWN:
-                if event.button == 1:  # Left click
-                    self.handle_click(event.pos)
-
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_r:
-                    # Restart
-                    self.__init__(game_mode=self.game_mode, bot_model_path=self.bot_model_path)
-                    self.show_message("Game restarted!")
-
-                elif event.key == pygame.K_q:
-                    return False
-
-                elif event.key == pygame.K_b:
-                    # Toggle bot thinking display
-                    self.show_bot_thinking = not self.show_bot_thinking
-                    state = "ON" if self.show_bot_thinking else "OFF"
-                    self.show_message(f"Bot thinking display: {state}")
-
-                elif event.key == pygame.K_u:
-                    # Undo last move
-                    self.game_state.undo_last_move()
-                    self.show_message("Undid last move")
-
-        return True
-
-    def run(self):
-        """
-        Main game loop.
-        """
-        print("\n" + "="*80)
-        print("DOTS & CUTS - INTERACTIVE GAME")
-        print("="*80)
-        print(f"Game Mode: {self._get_mode_name()}")
-        print("\nControls:")
-        print("  - Click on your pieces to select them")
-        print("  - Click on highlighted squares to move/shoot")
-        print("  - Press 'B' to toggle bot thinking display")
-        print("  - Press 'U' to undo last move")
-        print("  - Press 'R' to restart")
-        print("  - Press 'Q' to quit")
-        print("="*80 + "\n")
+        self._refresh_bot_thinking()
 
         running = True
         while running:
-            running = self.handle_events()
+            # Events
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    return "quit"
 
+                elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    self._handle_click(event.pos)
+                    self._refresh_bot_thinking()
+
+                elif event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_q:
+                        return "menu"
+
+                    elif event.key == pygame.K_r:
+                        # Restart same config
+                        self.__init__(self.config)
+                        self._show("Game restarted!")
+
+                    elif event.key == pygame.K_u:
+                        if not self.game_over and self.game_state.history:
+                            if self.bot:
+                                # Undo both bot + human to return to human's previous decision
+                                self.game_state.undo_last_move()  # undo bot
+                                if self.game_state.history:
+                                    self.game_state.undo_last_move()  # undo human
+                                # current_player stays (still human's turn)
+                            else:
+                                # PvP: undo one move, switch turn back
+                                self.game_state.undo_last_move()
+                                self.current_player = 2 if self.current_player == 1 else 1
+                            self.selected_piece = None
+                            self.legal_moves = set()
+                            self.legal_shoots = set()
+                            self._show("Undo")
+                            self._refresh_bot_thinking()
+
+                    elif event.key == pygame.K_b:
+                        self.show_bot_thinking = not self.show_bot_thinking
+                        self._refresh_bot_thinking()
+                        state = "ON" if self.show_bot_thinking else "OFF"
+                        self._show(f"Bot thinking: {state}")
+
+                    elif event.key == pygame.K_g:
+                        self.show_grid = not self.show_grid
+                        self._show(f"Grid edges: {'ON' if self.show_grid else 'OFF'}")
+
+                    elif event.key == pygame.K_z:
+                        self.show_z_hints = not self.show_z_hints
+                        self._show(f"Z-value hints: {'ON' if self.show_z_hints else 'OFF'}")
+
+            # Bot turn (after events so it draws one frame first)
             if self._is_bot_turn() and not self.game_over:
-                self.execute_bot_move()
+                self._do_bot_turn()
+                self._refresh_bot_thinking()
 
-            self.draw()
+            # Tick message timer
+            if self.message_timer > 0:
+                self.message_timer -= 1
+            else:
+                self.message = ""
 
-        self.display.quit()
+            # Draw
+            self.display.draw_frame(
+                self.game_state,
+                self.current_player,
+                selected_piece=self.selected_piece,
+                legal_moves=self.legal_moves,
+                legal_shoots=self.legal_shoots,
+                bot_top_moves=self._bot_top_cache,
+                bot_label=self.bot.label if self.bot else "",
+                message=self.message,
+                game_over=self.game_over,
+                winner=self.winner,
+                show_grid=self.show_grid,
+                show_z_hints=self.show_z_hints,
+            )
 
-    def _get_mode_name(self):
-        """Get human-readable game mode name."""
-        modes = {
-            GameMode.PLAYER_VS_PLAYER: "Player vs Player",
-            GameMode.PLAYER_VS_BOT: "Player vs Bot",
-            GameMode.BOT_VS_BOT: "Bot vs Bot"
-        }
-        return modes.get(self.game_mode, "Unknown")
+        return "quit"
 
 
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
 def main():
-    """
-    Main entry point.
-    """
-    import argparse
+    pygame.init()
 
-    parser = argparse.ArgumentParser(description="Dots & Cuts Interactive Game")
-    parser.add_argument('--mode', type=str, default='pvp',
-                        choices=['pvp', 'pvbot', 'botbot'],
-                        help='Game mode: pvp=Player vs Player, pvbot=Player vs Bot, botbot=Bot vs Bot')
-    parser.add_argument('--bot-model', type=str, default='../RL_approach/checkpoints/model_ep5000.pt',
-                        help='Path to trained bot model')
+    while True:
+        selector = ModeSelector()
+        config = selector.run()
 
-    args = parser.parse_args()
+        if config is None:
+            break  # user closed the menu
 
-    # Map mode strings to GameMode enum
-    mode_map = {
-        'pvp': GameMode.PLAYER_VS_PLAYER,
-        'pvbot': GameMode.PLAYER_VS_BOT,
-        'botbot': GameMode.BOT_VS_BOT
-    }
+        try:
+            game = GameUI(config)
+            result = game.run()
+            if result == "quit":
+                break
+            # result == "menu" -> loop back to selector
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f"\nError: {e}")
+            break
 
-    game_mode = mode_map[args.mode]
-
-    # Create game
-    try:
-        game = GameUI(game_mode=game_mode, bot_model_path=args.bot_model)
-        game.run()
-    except KeyboardInterrupt:
-        print("\n\nGame interrupted by user.")
-    except Exception as e:
-        print(f"\nError: {e}")
-        import traceback
-        traceback.print_exc()
+    pygame.quit()
 
 
 if __name__ == "__main__":

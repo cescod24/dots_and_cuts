@@ -1,347 +1,317 @@
 """
 Game Display Module for Dots & Cuts
 ====================================
-Renders the game board with:
-- 9x9 grid of vertices (dots/circles)
-- Towers (circles inside cells)
-- Bunkers (diamonds/rotated squares inside cells)
-- Lakes (all edges of a cell marked as visited)
-- Pieces (colored squares on vertices)
+Renders the board and UI elements using PyGame.
+
+Supports any board size (5x5 to 15x15) by computing layout dynamically.
+Left area: board.  Right panel: info + bot thinking.
+
+Toggleable overlays (controlled by the caller):
+  - show_grid:    draw unvisited edges as faint lines  (default OFF)
+  - show_z_hints: colour vertices by z-value            (default OFF)
 """
 
 import pygame
-import numpy as np
 
 
 class GameDisplay:
-    """
-    Handles all rendering of the board and game state.
-    """
+    """Handles all rendering of the board, pieces, and UI."""
 
-    # Color palette
     COLORS = {
-        'background': (245, 245, 245),      # Light gray
-        'grid_line': (100, 100, 100),       # Dark gray
-        'vertex': (50, 50, 50),             # Black dots
-        'tower': (100, 150, 255),           # Blue circles
-        'bunker': (255, 100, 100),          # Red diamond
-        'lake_edge': (150, 200, 255),       # Light blue edges
-        'visited_edge': (200, 200, 200),    # Gray visited edges
-        'unvisited_edge': (220, 220, 220),  # Light gray unvisited
-        'p1_piece': (0, 100, 0),            # Dark green
-        'p2_piece': (200, 0, 0),            # Red
-        'p1_selected': (0, 255, 0),         # Bright green
-        'p2_selected': (255, 100, 100),     # Light red
-        'legal_move': (100, 200, 100),      # Light green
-        'legal_shoot': (255, 200, 100),     # Orange
+        "bg":              (24,  24,  28),
+        "panel_bg":        (32,  32,  38),
+        "grid_dot":        (160, 160, 160),
+        "grid_dot_tower":  (90,  140, 240),
+        "grid_dot_bunker": (230, 90,  90),
+        "tower":           (90,  140, 240),
+        "bunker":          (230, 90,  90),
+        "lake_fill":       (50,  85, 120),
+        "visited_edge":    (190, 190, 190),
+        "unvisited_edge":  (48,  48,  54),
+        "lake_edge":       (70,  110, 155),
+        "p1":              (50,  180, 80),
+        "p1_sel":          (100, 255, 120),
+        "p2":              (210, 60,  60),
+        "p2_sel":          (255, 120, 120),
+        "legal_move":      (80,  200, 120),
+        "legal_shoot":     (240, 180, 60),
+        "text":            (220, 220, 220),
+        "text_dim":        (120, 120, 130),
+        "accent":          (100, 160, 255),
+        "divider":         (55,  55,  62),
     }
 
-    def __init__(self, width=1000, height=1000):
-        """
-        Initialize the display.
+    PANEL_WIDTH = 280
 
-        Args:
-            width: Window width in pixels
-            height: Window height in pixels
-        """
+    def __init__(self, board_size: int = 9, width: int = 1080, height: int = 760):
+        self.board_size = board_size
         self.width = width
         self.height = height
-        self.margin = 60  # Space for margins around board
 
-        # Calculate cell size
-        board_width = width - 2 * self.margin
-        board_height = height - 2 * self.margin
+        board_area = min(width - self.PANEL_WIDTH - 40, height - 80)
+        margin = 50
+        usable = board_area - 2 * margin
+        self.cell_size = usable / (board_size - 1)
+        self.board_x = margin
+        self.board_y = margin
 
-        # For 9x9 board (9 vertices), we need 8 cells between them
-        # Cell size is the distance between vertices
-        self.cell_size = min(board_width, board_height) / 8.0
-
-        # Board origin (top-left corner)
-        self.board_x = self.margin
-        self.board_y = self.margin
-
-        # Initialize pygame
         self.screen = pygame.display.set_mode((width, height))
-        pygame.display.set_caption("Dots & Cuts - Interactive Game")
+        pygame.display.set_caption("Dots & Cuts")
 
-        self.font_small = pygame.font.Font(None, 18)
-        self.font_medium = pygame.font.Font(None, 24)
-        self.font_large = pygame.font.Font(None, 32)
+        self.font_sm  = pygame.font.SysFont("Arial", 13)
+        self.font_md  = pygame.font.SysFont("Arial", 16)
+        self.font_lg  = pygame.font.SysFont("Arial", 22, bold=True)
+        self.font_xl  = pygame.font.SysFont("Arial", 28, bold=True)
+        self.font_tiny = pygame.font.SysFont("Arial", 11)
 
         self.clock = pygame.time.Clock()
 
-    def vertex_to_pixel(self, vertex_x, vertex_y):
-        """
-        Convert board vertex coordinates (0-8, 0-8) to pixel coordinates.
-        """
-        pixel_x = self.board_x + vertex_x * self.cell_size
-        pixel_y = self.board_y + vertex_y * self.cell_size
-        return int(pixel_x), int(pixel_y)
+    # ---- coordinate conversion ----
 
-    def pixel_to_vertex(self, pixel_x, pixel_y):
-        """
-        Convert pixel coordinates back to board vertex coordinates.
-        Returns None if outside board.
-        """
-        vx = (pixel_x - self.board_x) / self.cell_size
-        vy = (pixel_y - self.board_y) / self.cell_size
+    def vertex_to_pixel(self, vx, vy):
+        return (int(self.board_x + vx * self.cell_size),
+                int(self.board_y + vy * self.cell_size))
 
-        # Snap to nearest vertex if close enough
-        vx_snapped = round(vx)
-        vy_snapped = round(vy)
-
-        # Check if within board bounds (0-8 for 9x9)
-        if 0 <= vx_snapped <= 8 and 0 <= vy_snapped <= 8:
-            # Check if actually close to a vertex (within half cell size)
-            if abs(vx - vx_snapped) < 0.3 and abs(vy - vy_snapped) < 0.3:
-                return int(vx_snapped), int(vy_snapped)
-
+    def pixel_to_vertex(self, px, py):
+        vx = (px - self.board_x) / self.cell_size
+        vy = (py - self.board_y) / self.cell_size
+        rx, ry = round(vx), round(vy)
+        if 0 <= rx < self.board_size and 0 <= ry < self.board_size:
+            if abs(vx - rx) < 0.35 and abs(vy - ry) < 0.35:
+                return rx, ry
         return None
 
-    def draw_board(self, game_state):
-        """
-        Draw the complete board state.
-        """
-        # Clear screen
-        self.screen.fill(self.COLORS['background'])
+    # ---- full frame ----
 
-        # Draw grid and cells
-        self.draw_grid(game_state)
+    def draw_frame(self, game_state, current_player, *,
+                   selected_piece=None, legal_moves=None, legal_shoots=None,
+                   bot_top_moves=None, bot_label="", message="",
+                   game_over=False, winner=None,
+                   show_grid=False, show_z_hints=False):
+        """Draw one complete frame. Toggles passed from GameUI."""
+        self.screen.fill(self.COLORS["bg"])
 
-        # Draw visited edges
-        self.draw_visited_edges(game_state)
+        self._draw_edges(game_state, show_grid)
+        self._draw_obstacles(game_state)
+        self._draw_vertices(game_state, show_z_hints)
+        self._draw_highlights(legal_moves, legal_shoots)
+        self._draw_pieces(game_state, selected_piece)
+        self._draw_panel(current_player, bot_top_moves, bot_label,
+                         message, game_over, winner, game_state,
+                         show_grid, show_z_hints)
 
-        # Draw towers and bunkers
-        self.draw_obstacles(game_state)
+        pygame.display.flip()
+        self.clock.tick(60)
 
-        # Draw pieces
-        self.draw_pieces(game_state)
+    # ---- board elements ----
 
-    def draw_grid(self, game_state):
-        """
-        Draw the 9x9 vertex grid (dots at each vertex).
-        """
-        vertex_radius = 5
-
-        # Draw vertices (the dots)
-        for vy in range(game_state.board.size):
-            for vx in range(game_state.board.size):
+    def _draw_vertices(self, gs, show_z):
+        r = max(3, int(self.cell_size * 0.055))
+        for vy in range(gs.board.size):
+            for vx in range(gs.board.size):
                 px, py = self.vertex_to_pixel(vx, vy)
-                pygame.draw.circle(self.screen, self.COLORS['vertex'], (px, py), vertex_radius)
+                if show_z:
+                    z = gs.board.z[vy][vx]
+                    if z == 1:
+                        color = self.COLORS["grid_dot_tower"]
+                    elif z == -1:
+                        color = self.COLORS["grid_dot_bunker"]
+                    else:
+                        color = self.COLORS["grid_dot"]
+                else:
+                    color = self.COLORS["grid_dot"]
+                pygame.draw.circle(self.screen, color, (px, py), r)
 
-    def draw_visited_edges(self, game_state):
-        """
-        Draw visited and unvisited edges between vertices.
-        - Gray for visited edges
-        - Light gray for unvisited edges
-        - Light blue for edges adjacent to lakes
-        """
-        edge_width = 3
+    def _draw_edges(self, gs, show_grid):
+        w = max(1, int(self.cell_size * 0.025))
 
-        # Pre-compute which edges are lake edges
         lake_edges = set()
-        for y in range(game_state.board.size - 1):
-            for x in range(game_state.board.size - 1):
-                if game_state.board.lakes[y][x]:
-                    # All 6 edges of this cell are lake edges
-                    v_tl = (x, y)
-                    v_tr = (x + 1, y)
-                    v_bl = (x, y + 1)
-                    v_br = (x + 1, y + 1)
-                    edges = [
-                        tuple(sorted([v_tl, v_tr])),
-                        tuple(sorted([v_tr, v_br])),
-                        tuple(sorted([v_br, v_bl])),
-                        tuple(sorted([v_bl, v_tl])),
-                        tuple(sorted([v_tl, v_br])),
-                        tuple(sorted([v_tr, v_bl]))
-                    ]
-                    lake_edges.update(edges)
+        for cy in range(gs.board.size - 1):
+            for cx in range(gs.board.size - 1):
+                if gs.board.lakes[cy][cx]:
+                    tl, tr = (cx, cy), (cx+1, cy)
+                    bl, br = (cx, cy+1), (cx+1, cy+1)
+                    for e in [(tl,tr),(tr,br),(br,bl),(bl,tl),(tl,br),(tr,bl)]:
+                        lake_edges.add(tuple(sorted(e)))
 
-        # Draw all possible edges
-        for vy in range(game_state.board.size):
-            for vx in range(game_state.board.size):
-                # Orthogonal neighbors
-                for next_vx, next_vy in [(vx+1, vy), (vx, vy+1)]:
-                    if next_vx < game_state.board.size and next_vy < game_state.board.size:
-                        edge = tuple(sorted([(vx, vy), (next_vx, next_vy)]))
+        drawn = set()
+        for vy in range(gs.board.size):
+            for vx in range(gs.board.size):
+                for nx, ny in [(vx+1,vy),(vx,vy+1),(vx+1,vy+1),(vx-1,vy+1)]:
+                    if 0 <= nx < gs.board.size and 0 <= ny < gs.board.size:
+                        edge = tuple(sorted([(vx,vy),(nx,ny)]))
+                        if edge in drawn:
+                            continue
+                        drawn.add(edge)
 
-                        px1, py1 = self.vertex_to_pixel(vx, vy)
-                        px2, py2 = self.vertex_to_pixel(next_vx, next_vy)
+                        is_lake = edge in lake_edges
+                        is_visited = edge in gs.visited_edges
 
-                        # Determine color
-                        if edge in lake_edges:
-                            color = self.COLORS['lake_edge']
-                        elif edge in game_state.visited_edges:
-                            color = self.COLORS['visited_edge']
+                        # Decide whether to draw
+                        if is_lake:
+                            color = self.COLORS["lake_edge"]
+                        elif is_visited:
+                            color = self.COLORS["visited_edge"]
+                        elif show_grid:
+                            color = self.COLORS["unvisited_edge"]
                         else:
-                            color = self.COLORS['unvisited_edge']
+                            continue  # skip unvisited edges when grid is off
 
-                        pygame.draw.line(self.screen, color, (px1, py1), (px2, py2), edge_width)
+                        p1 = self.vertex_to_pixel(edge[0][0], edge[0][1])
+                        p2 = self.vertex_to_pixel(edge[1][0], edge[1][1])
+                        pygame.draw.line(self.screen, color, p1, p2, w)
 
-                # Diagonal neighbors
-                for next_vx, next_vy in [(vx+1, vy+1), (vx+1, vy-1)]:
-                    if 0 <= next_vx < game_state.board.size and 0 <= next_vy < game_state.board.size:
-                        # Only draw the first diagonal to avoid duplicates
-                        if next_vx > vx:
-                            edge = tuple(sorted([(vx, vy), (next_vx, next_vy)]))
+    def _draw_obstacles(self, gs):
+        r = max(5, int(self.cell_size * 0.20))
+        for cy in range(gs.board.size - 1):
+            for cx in range(gs.board.size - 1):
+                ccx = int(self.board_x + (cx + 0.5) * self.cell_size)
+                ccy = int(self.board_y + (cy + 0.5) * self.cell_size)
 
-                            px1, py1 = self.vertex_to_pixel(vx, vy)
-                            px2, py2 = self.vertex_to_pixel(next_vx, next_vy)
+                if gs.board.lakes[cy][cx]:
+                    s = int(r * 1.0)
+                    rect = pygame.Rect(ccx - s, ccy - s, s*2, s*2)
+                    pygame.draw.rect(self.screen, self.COLORS["lake_fill"], rect, border_radius=3)
 
-                            # Determine color
-                            if edge in lake_edges:
-                                color = self.COLORS['lake_edge']
-                            elif edge in game_state.visited_edges:
-                                color = self.COLORS['visited_edge']
-                            else:
-                                color = self.COLORS['unvisited_edge']
+                if gs.board.towers[cy][cx]:
+                    pygame.draw.circle(self.screen, self.COLORS["tower"], (ccx, ccy), r)
+                    pygame.draw.circle(self.screen, (200,200,200), (ccx, ccy), r, 1)
 
-                            pygame.draw.line(self.screen, color, (px1, py1), (px2, py2), edge_width)
+                if gs.board.bunkers[cy][cx]:
+                    pts = [(ccx, ccy-r), (ccx+r, ccy), (ccx, ccy+r), (ccx-r, ccy)]
+                    pygame.draw.polygon(self.screen, self.COLORS["bunker"], pts)
+                    pygame.draw.polygon(self.screen, (200,200,200), pts, 1)
 
-    def draw_obstacles(self, game_state):
-        """
-        Draw towers (blue circles) and bunkers (red diamonds) in cells.
-        """
-        tower_radius = int(self.cell_size * 0.25)
-
-        for cy in range(game_state.board.size - 1):
-            for cx in range(game_state.board.size - 1):
-                # Cell center
-                cell_cx = self.board_x + (cx + 0.5) * self.cell_size
-                cell_cy = self.board_y + (cy + 0.5) * self.cell_size
-
-                if game_state.board.towers[cy][cx]:
-                    # Draw tower (blue circle)
-                    pygame.draw.circle(
-                        self.screen,
-                        self.COLORS['tower'],
-                        (int(cell_cx), int(cell_cy)),
-                        tower_radius
-                    )
-
-                if game_state.board.bunkers[cy][cx]:
-                    # Draw bunker (red diamond)
-                    self.draw_diamond(
-                        int(cell_cx), int(cell_cy),
-                        int(tower_radius * 1.2),
-                        self.COLORS['bunker']
-                    )
-
-    def draw_diamond(self, center_x, center_y, size, color):
-        """
-        Draw a diamond (rotated square) shape.
-        """
-        points = [
-            (center_x, center_y - size),       # Top
-            (center_x + size, center_y),       # Right
-            (center_x, center_y + size),       # Bottom
-            (center_x - size, center_y)        # Left
-        ]
-        pygame.draw.polygon(self.screen, color, points)
-        pygame.draw.polygon(self.screen, (0, 0, 0), points, 2)  # Border
-
-    def draw_pieces(self, game_state, selected_piece=None, legal_moves=None, legal_shoots=None):
-        """
-        Draw all pieces on the board.
-
-        Args:
-            game_state: Current game state
-            selected_piece: Currently selected piece (highlighted)
-            legal_moves: Set of legal move targets
-            legal_shoots: Set of legal shoot targets
-        """
-        piece_size = int(self.cell_size * 0.3)
-
-        # Draw legal move/shoot targets
+    def _draw_highlights(self, legal_moves, legal_shoots):
+        r = max(7, int(self.cell_size * 0.16))
         if legal_moves:
             for vx, vy in legal_moves:
                 px, py = self.vertex_to_pixel(vx, vy)
-                pygame.draw.circle(self.screen, self.COLORS['legal_move'], (px, py), piece_size + 3, 2)
-
+                pygame.draw.circle(self.screen, self.COLORS["legal_move"], (px, py), r, 2)
         if legal_shoots:
             for vx, vy in legal_shoots:
                 px, py = self.vertex_to_pixel(vx, vy)
-                pygame.draw.circle(self.screen, self.COLORS['legal_shoot'], (px, py), piece_size + 3, 2)
+                pygame.draw.circle(self.screen, self.COLORS["legal_shoot"], (px, py), r, 2)
 
-        # Draw pieces
-        for piece in game_state.pieces:
-            px, py = self.vertex_to_pixel(piece.x, piece.y)
+    # ---- pieces (smaller) ----
 
-            # Determine color based on player
-            if piece.player == 1:
-                color = self.COLORS['p1_piece']
-                if piece == selected_piece:
-                    color = self.COLORS['p1_selected']
+    def _draw_pieces(self, gs, selected_piece):
+        sz = max(6, int(self.cell_size * 0.16))  # smaller than before (was 0.25)
+
+        by_vertex = {}
+        for p in gs.pieces:
+            by_vertex.setdefault((p.x, p.y), []).append(p)
+
+        for (vx, vy), pieces in by_vertex.items():
+            px, py = self.vertex_to_pixel(vx, vy)
+            if len(pieces) == 1:
+                self._piece(pieces[0], px, py, sz, pieces[0] is selected_piece)
             else:
-                color = self.COLORS['p2_piece']
-                if piece == selected_piece:
-                    color = self.COLORS['p2_selected']
+                off = int(sz * 0.8)
+                for i, p in enumerate(pieces):
+                    dx = (i % 2) * off - off // 2
+                    dy = (i // 2) * off - off // 2
+                    self._piece(p, px+dx, py+dy, sz, p is selected_piece)
 
-            # Draw piece as square
-            rect = pygame.Rect(px - piece_size, py - piece_size, piece_size * 2, piece_size * 2)
-            pygame.draw.rect(self.screen, color, rect)
+    def _piece(self, piece, px, py, sz, sel):
+        c = {
+            (1, False): self.COLORS["p1"],
+            (1, True):  self.COLORS["p1_sel"],
+            (2, False): self.COLORS["p2"],
+            (2, True):  self.COLORS["p2_sel"],
+        }[(piece.player, sel)]
 
-            # Draw piece type (O for orthogonal, D for diagonal)
-            type_char = "O" if piece.kind == "orthogonal" else "D"
-            type_text = self.font_small.render(type_char, True, (255, 255, 255))
-            self.screen.blit(type_text, (px - 5, py - 5))
+        rect = pygame.Rect(px - sz, py - sz, sz*2, sz*2)
+        pygame.draw.rect(self.screen, c, rect, border_radius=3)
+        if sel:
+            pygame.draw.rect(self.screen, (255,255,255), rect, 2, border_radius=3)
 
-    def draw_ui_bottom(self, current_player, game_info=""):
-        """
-        Draw UI information at the bottom of the screen.
-        """
-        ui_y = self.height - 40
+        label = "O" if piece.kind == "orthogonal" else "D"
+        txt = self.font_tiny.render(label, True, (255,255,255))
+        self.screen.blit(txt, txt.get_rect(center=(px, py)))
 
-        # Current player indicator
-        player_color = self.COLORS['p1_piece'] if current_player == 1 else self.COLORS['p2_piece']
-        player_text = f"Player {current_player}'s Turn"
-        text_surface = self.font_medium.render(player_text, True, player_color)
-        self.screen.blit(text_surface, (20, ui_y))
+    # ---- right panel ----
 
-        # Game info
-        if game_info:
-            info_surface = self.font_small.render(game_info, True, (50, 50, 50))
-            self.screen.blit(info_surface, (300, ui_y + 5))
+    def _draw_panel(self, cur_player, bot_top, bot_label,
+                    msg, game_over, winner, gs, show_grid, show_z):
+        px = self.width - self.PANEL_WIDTH
+        pygame.draw.rect(self.screen, self.COLORS["panel_bg"],
+                         (px, 0, self.PANEL_WIDTH, self.height))
+        pygame.draw.line(self.screen, self.COLORS["divider"],
+                         (px, 0), (px, self.height), 1)
 
-    def draw_bot_thinking(self, top_3_moves, position=(20, 20)):
-        """
-        Draw the bot's top 3 candidate moves and evaluations.
-
-        Args:
-            top_3_moves: List of tuples (action_text, q_value, is_best)
-            position: (x, y) position to draw at
-        """
-        x, y = position
-        line_height = 25
+        x, y = px + 14, 16
 
         # Title
-        title_surface = self.font_medium.render("Bot's Top Moves:", True, (0, 0, 0))
-        self.screen.blit(title_surface, (x, y))
-        y += line_height + 5
+        self.screen.blit(self.font_xl.render("Dots & Cuts", True, self.COLORS["text"]), (x, y))
+        y += 38
+        pygame.draw.line(self.screen, self.COLORS["divider"], (x, y), (x + self.PANEL_WIDTH - 28, y))
+        y += 12
 
-        for i, (action_text, q_value, is_best) in enumerate(top_3_moves[:3]):
-            # Format: "1. Move (7,5) -> (6,5)  Q=0.85"
-            rank = i + 1
-            color = (255, 100, 0) if is_best else (50, 50, 50)
+        # Player turn / game over
+        if game_over:
+            t = self.font_lg.render(f"Player {winner} wins!", True, self.COLORS["accent"])
+        else:
+            pc = self.COLORS["p1"] if cur_player == 1 else self.COLORS["p2"]
+            t = self.font_lg.render(f"Player {cur_player}'s turn", True, pc)
+        self.screen.blit(t, (x, y)); y += 30
 
-            move_text = f"{rank}. {action_text:30s} Q={q_value:6.3f}"
-            if is_best:
-                move_text += "  ← BEST"
+        # Piece counts
+        p1n = sum(1 for p in gs.pieces if p.player == 1)
+        p2n = sum(1 for p in gs.pieces if p.player == 2)
+        self.screen.blit(self.font_md.render(
+            f"P1: {p1n} pieces   P2: {p2n} pieces", True, self.COLORS["text_dim"]), (x, y))
+        y += 24
 
-            text_surface = self.font_small.render(move_text, True, color)
-            self.screen.blit(text_surface, (x, y))
-            y += line_height
+        if bot_label:
+            self.screen.blit(self.font_md.render(
+                f"Bot: {bot_label}", True, self.COLORS["text_dim"]), (x, y))
+            y += 22
 
-    def update(self):
-        """
-        Update the display (flip buffers, handle timing).
-        """
-        pygame.display.flip()
-        self.clock.tick(60)  # 60 FPS
+        y += 4
+        pygame.draw.line(self.screen, self.COLORS["divider"], (x, y), (x + self.PANEL_WIDTH - 28, y))
+        y += 10
+
+        # Bot top moves
+        if bot_top:
+            self.screen.blit(self.font_lg.render("Bot's Top Moves", True, self.COLORS["accent"]), (x, y))
+            y += 26
+            for i, (astr, sc, best) in enumerate(bot_top):
+                col = self.COLORS["accent"] if best else self.COLORS["text"]
+                pf = ">" if best else " "
+                ln = f"{pf} {i+1}. {astr:24s} {sc:+.3f}"
+                self.screen.blit(self.font_md.render(ln, True, col), (x, y))
+                y += 20
+            y += 8
+
+        # Toggle status indicators
+        y2 = self.height - 180
+        pygame.draw.line(self.screen, self.COLORS["divider"], (x, y2), (x + self.PANEL_WIDTH - 28, y2))
+        y2 += 10
+
+        # Show current toggle states
+        grid_st = "ON" if show_grid else "OFF"
+        z_st    = "ON" if show_z    else "OFF"
+        self.screen.blit(self.font_md.render("Overlays", True, self.COLORS["text"]), (x, y2))
+        y2 += 20
+        self.screen.blit(self.font_sm.render(f"  G = Grid edges: {grid_st}", True, self.COLORS["text_dim"]), (x, y2))
+        y2 += 16
+        self.screen.blit(self.font_sm.render(f"  Z = Z-value hints: {z_st}", True, self.COLORS["text_dim"]), (x, y2))
+        y2 += 22
+
+        # Controls
+        self.screen.blit(self.font_md.render("Controls", True, self.COLORS["text"]), (x, y2))
+        y2 += 20
+        for line in ["Click to select / act",
+                      "U = Undo   R = Restart",
+                      "B = Bot thinking   Q = Menu"]:
+            self.screen.blit(self.font_sm.render(line, True, self.COLORS["text_dim"]), (x, y2))
+            y2 += 16
+
+        # Message
+        if msg:
+            self.screen.blit(self.font_md.render(msg, True, self.COLORS["accent"]),
+                             (x, self.height - 24))
 
     def quit(self):
-        """
-        Clean up and close the display.
-        """
-        pygame.quit()
+        pass
