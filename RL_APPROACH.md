@@ -596,6 +596,56 @@ So if we call `state_to_vector_v2(game_state, player=2)`:
 
 ---
 
+## Command-Line Usage
+
+Both RL v1 and v2 support flexible CLI options for training and resuming:
+
+### RL Version 1 (Standard DQN)
+
+```bash
+# Train from scratch (default: 5000 episodes)
+python3 RL_approach/rl_training.py
+
+# Train for custom duration
+python3 RL_approach/rl_training.py --episodes 10000
+
+# Resume from checkpoint, continue to 5000 total
+python3 RL_approach/rl_training.py --resume RL_approach/checkpoints/model_ep2000.pt
+
+# Resume from checkpoint, continue to 8000 total
+python3 RL_approach/rl_training.py --resume RL_approach/checkpoints/model_ep2000.pt --episodes 8000
+```
+
+### RL Version 2 (Enhanced Double DQN)
+
+```bash
+# Train from scratch (default: 5000 episodes)
+python3 RL_approach/rl_training_v2.py
+
+# Train for custom duration
+python3 RL_approach/rl_training_v2.py --episodes 10000
+
+# Resume from checkpoint
+python3 RL_approach/rl_training_v2.py --resume RL_approach/checkpoints_v2/model_ep3000.pt --episodes 8000
+```
+
+### Resume Details
+
+When using `--resume`:
+- Loads Q-network weights from checkpoint
+- Loads target network weights
+- Restores epsilon (exploration rate) from checkpoint
+- Continues training from `checkpoint_episode + 1` to `target_episodes`
+- Appends new results to existing CSV log
+- Saves new checkpoints to the same directory
+
+This allows:
+- Extending training past original duration
+- Continuing interrupted runs
+- Fine-tuning trained models with different hyperparameters (by modifying code)
+
+---
+
 ## Known Issues & Fixes
 
 ### Bug: Z-Index Transposition in can_shoot()

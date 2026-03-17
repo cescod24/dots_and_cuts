@@ -32,12 +32,27 @@ Ho completato l'implementazione di un **sistema RL scientifico** con proper Q-le
 
 ### Step 1️⃣ - Training (Addestrare il modello)
 
+#### Opzione A: Allenamento da zero
 ```bash
 python3 rl_training.py
 ```
 
+#### Opzione B: Allenamento customizzato (durata)
+```bash
+python3 rl_training.py --episodes 10000
+```
+
+#### Opzione C: Riprendere il training da un checkpoint
+```bash
+python3 rl_training.py --resume checkpoints/model_ep2000.pt
+# Continua da episodio 2001 a 5000 (default)
+
+python3 rl_training.py --resume checkpoints/model_ep2000.pt --episodes 8000
+# Continua da episodio 2001 a 8000
+```
+
 **Cosa succede:**
-- Esegue 5000 episodi di self-play (impiegapprox 30-60 minuti dipende da CPU)
+- Esegue episodi di self-play (impiegapprox 30-60 minuti dipende da CPU)
 - Ogni episodio: Player 1 vs Player 2 controllati da RL agent
 - Stampa progress ogni 100 episodi
 - Salva `training_log.csv` con metriche
@@ -143,7 +158,22 @@ Testa il modello senza alcuni componenti:
 - Cosa succede con Gamma più basso (0.5 vs 0.9)?
 - Cosa succede se aumenti Learning Rate?
 
-### 3. Load un Checkpoint e Continua Training
+### 3. Riprendere il Training da un Checkpoint
+
+Entrambi gli script RL v1 e v2 supportano il resume nativo via CLI:
+
+**RL V1:**
+```bash
+python3 rl_training.py --resume checkpoints/model_ep2000.pt --episodes 8000
+```
+
+**RL V2:**
+```bash
+python3 rl_training_v2.py --resume checkpoints_v2/model_ep2000.pt --episodes 8000
+```
+
+Oppure, se preferisci caricarlo manualmente in Python:
+
 ```python
 import torch
 from rl_training import RLAgent
