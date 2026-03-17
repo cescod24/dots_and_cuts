@@ -241,6 +241,11 @@ class _RLTierScreen(_Menu):
         self.tiers = self._build_tiers()
 
     def _build_tiers(self):
+        """
+        Build tier selection (weak/medium/strong) proportionally.
+        Selects checkpoints at ~20%, ~50%, and 100% of max episode count,
+        regardless of how many total checkpoints exist.
+        """
         cks = self.checkpoints
         if not cks:
             return []
@@ -248,18 +253,33 @@ class _RLTierScreen(_Menu):
         def ep(path):
             return int(path.split("model_ep")[1].split(".pt")[0])
 
+        episodes = sorted([ep(ck) for ck in cks])
+        max_ep = episodes[-1]
+
+        # Find closest checkpoint to target percentages
+        weak_target = max_ep * 0.20    # ~20% of max
+        medium_target = max_ep * 0.50  # ~50% of max
+        strong_target = max_ep         # 100% (always the last)
+
+        def find_closest(target):
+            """Find checkpoint closest to target episode count."""
+            return min(cks, key=lambda c: abs(ep(c) - target))
+
         tiers = []
         if len(cks) == 1:
             tiers.append(("Only available", f"ep {ep(cks[0])}", cks[0]))
         elif len(cks) == 2:
-            tiers.append(("Weak", f"ep {ep(cks[0])}", cks[0]))
-            tiers.append(("Strong", f"ep {ep(cks[-1])}", cks[-1]))
+            weak_ck = find_closest(weak_target)
+            strong_ck = find_closest(strong_target)
+            tiers.append(("Weak", f"ep {ep(weak_ck)}", weak_ck))
+            tiers.append(("Strong", f"ep {ep(strong_ck)}", strong_ck))
         else:
-            # Pick early, mid, late
-            tiers.append(("Weak", f"ep {ep(cks[0])}", cks[0]))
-            mid = cks[len(cks) // 2]
-            tiers.append(("Medium", f"ep {ep(mid)}", mid))
-            tiers.append(("Strong", f"ep {ep(cks[-1])}", cks[-1]))
+            weak_ck = find_closest(weak_target)
+            medium_ck = find_closest(medium_target)
+            strong_ck = find_closest(strong_target)
+            tiers.append(("Weak", f"ep {ep(weak_ck)}", weak_ck))
+            tiers.append(("Medium", f"ep {ep(medium_ck)}", medium_ck))
+            tiers.append(("Strong", f"ep {ep(strong_ck)}", strong_ck))
         return tiers
 
     def run(self):

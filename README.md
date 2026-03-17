@@ -36,48 +36,21 @@ dots_and_cuts/
 └── README.md                 # This file
 ```
 
-## Key Implementation: Deep Q-Learning & Minimax Solvers (FIXED)
+## Key Implementation: Deep Q-Learning & Minimax Solvers
 
-### Critical Bug Fixed: Z-Index Transposition in Shooting Validation
+The system implements two distinct approaches to Dots & Cuts AI:
 
-**Location**: `dotscuts.py` lines 484, 485, 490 (and `core/dotscuts.py`)
+### Reinforcement Learning (RL_APPROACH.md)
 
-**Problem**: The `can_shoot()` method accessed z-value grid with `z[x][y]` instead of the correct `z[y][x]` convention used throughout the codebase.
+**Complete technical documentation** covering:
+- ✅ V1: Standard Deep Q-Learning (648-dim state, 256-128-64-1 network)
+- ✅ V2: Enhanced Double DQN (972-dim state, 512-256-128-64-1 network)
+- ✅ Mathematical foundations (Bellman equation, loss functions)
+- ✅ State representation deep dive (8 vs 12 layers, tactical features)
+- ✅ Turn management & RL training dynamics
+- ✅ Known issues & fixes (z-index bug corrected)
 
-```python
-# BEFORE (WRONG - allowed illegal shots like -1→0):
-z_start = game_state.board.z[self.x][self.y]
-z_end = game_state.board.z[target_x][target_y]
-z_mid = game_state.board.z[current_x][current_y]
-
-# AFTER (CORRECT - enforces actual shooting rules):
-z_start = game_state.board.z[self.y][self.x]
-z_end = game_state.board.z[target_y][target_x]
-z_mid = game_state.board.z[current_y][current_x]
-```
-
-**Impact**: Bots now properly enforce z-value shooting rules. Shots from -1 to 0 are correctly rejected as illegal.
-
-**Note**: Existing RL v1 models were trained with this bug active, so their learned strategies are based on incorrect validation. Consider retraining after this fix.
-
-### Reinforcement Learning: Two Versions
-
-**Version 1 (Standard Deep Q-Learning)**
-- Network: 256-128-64-1
-- Hyperparameters: LR=0.0005, γ=0.95, ε_decay=0.995
-- Buffer size: 5000
-- Batch size: 32
-- Simple reward: +1 win, -1 loss, 0 in-game
-- Checkpoints: `RL_approach/checkpoints/`
-
-**Version 2 (Enhanced Double DQN)**
-- Network: 512-256-128-64-1 (larger)
-- Hyperparameters: LR=0.0005, γ=0.95, ε_decay=0.997 (slower decay)
-- Buffer size: 10000 (larger)
-- Batch size: 64 (larger)
-- Shaped rewards:
-  - +0.4 per capture, -0.4 per loss
-  - Mobility bonus: 0.05 × clamped move count difference
+**Read**: [RL_APPROACH.md](./RL_APPROACH.md) for complete details on algorithms, math, and architecture.
   - Shoot threat bonus: 0.1 × min(shoot actions available, 2)
 - Double DQN: Uses two networks to reduce overestimation
 - Loss function: Huber (robust to outliers)
@@ -225,47 +198,20 @@ final_diff = abs(df.iloc[-1]['rolling_p1_wr'] - df.iloc[-1]['rolling_p2_wr'])
 print(f"Fairness (lower is better): {final_diff:.1f}%")
 ```
 
-## Understanding the RL Implementation
 
-### Bellman Equation
+## Documentation Map
 
-```
-Q(s,a) = r + γ × max[Q(s', a')]
-```
+For detailed information on specific topics:
 
-- Q(s,a): Expected value of taking action a in state s
-- r: Immediate reward (+1 for win, -1 for loss, 0 during game)
-- γ (gamma): Discount factor (0.9 = future 90% as important as present)
-- max[Q(s', a')]: Best possible value in next state
+| Topic | File |
+|-------|------|
+| **RL Algorithms & Math** | [RL_APPROACH.md](./RL_APPROACH.md) - Complete technical guide (state representations, Bellman, Double DQN, turn dynamics) |
+| **Project Structure** | [VERSION_ORGANIZATION.md](./VERSION_ORGANIZATION.md) - How versions are separated, adding new versions |
+| **RL Version Comparison** | [RL_approach/RL_VERSIONS.md](./RL_approach/RL_VERSIONS.md) - V1 vs V2 detailed comparison |
+| **Game UI Guide** | [pygame_ui/QUICKSTART.md](./pygame_ui/QUICKSTART.md) - How to play, controls, menu options |
+| **RL Deep Dive** | [RL_approach/README_RL.md](./RL_approach/README_RL.md) - Algorithm explanations and research methodology |
 
-The network learns to estimate Q-values. Good moves have high Q-values because they lead to good future states.
-
-### Experience Replay
-
-Problem: Training on sequential episodes causes correlated updates.
-Solution: Store experiences, sample random mini-batches.
-
-Benefits:
-- Breaks temporal correlation
-- Reuses successful experiences
-- Stabilizes neural network training
-
-### Target Network
-
-Two copies of the network:
-- Main network: Updated every step (learns)
-- Target network: Copied from main every 100 episodes (provides stable targets)
-
-Without target network, the network would chase a moving target (unstable).
-With target network, it learns from fixed targets (stable).
-
-### Epsilon-Greedy Exploration
-
-ε decays from 1.0 to 0.05:
-- Early training (ε=1.0): 100% random actions (explore)
-- Late training (ε=0.05): 95% best action, 5% random (exploit)
-
-This balances discovering new strategies vs refining good ones.
+---
 
 ## Performance Metrics
 
@@ -330,5 +276,5 @@ Good luck with your research! 🚀
 
 ---
 
-Last updated: 2024-03-16
-Version: 2.0 (Fixed Bellman Equation)
+Last updated: 2026-03-17
+Version: 2.1 (Consolidated Documentation with Enhanced Math & Turn Analysis)
