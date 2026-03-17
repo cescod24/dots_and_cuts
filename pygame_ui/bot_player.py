@@ -111,15 +111,65 @@ class RLBot:
             raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
 
         checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
-        self.version = checkpoint.get("version", "v1")
-        dims = self._DIMS[self.version]
-        input_dim = dims["input"]
 
-        # Select state vector function based on version
-        if self.version == "v2":
+        # Detect version from checkpoint: first try metadata, fallback to weight shape
+        self.version = checkpoint.get("version", None)
+
+        if self.version is None:
+            # Fallback: detect version from network weight dimensions
+            # First layer of q_network has shape [hidden_size, input_dim]
+            # V1: [256, 654], V2: [512, 978]
+            q_state = checkpoint.get("q_network_state", {})
+            if q_state:
+                first_weight_key = "net.0.weight"
+                if first_weight_key in q_state:
+                    first_weight_shape = q_state[first_weight_key].shape
+                    print(f"[RLBot] Detected checkpoint weight shape: {first_weight_shape}")
+                    if first_weight_shape[0] == 512:  # V2 has 512 hidden units in first layer
+                        self.version = "v2"
+                    else:  # V1 has 256
+                        self.version = "v1"
+                else:
+                    print(f"[RLBot] Warning: q_network_state keys: {list(q_state.keys())}")
+                    self.version = "v1"  # Default fallback
+            else:
+                self.version = "v1"  # Default fallback
+
+        # Get dimensions from checkpoint if available (handles legacy checkpoints)
+        checkpoint_state_dim = checkpoint.get("state_dim", None)
+
+        # Determine actual input dimension from checkpoint weights
+        actual_input_dim = None
+        q_state = checkpoint.get("q_network_state", {})
+        first_weight_key = "net.0.weight"
+        if q_state and first_weight_key in q_state:
+            actual_input_dim = q_state[first_weight_key].shape[1]
+
+        dims = self._DIMS[self.version]
+
+        # Use actual dimension if detected, otherwise use expected dimension
+        if actual_input_dim:
+            input_dim = actual_input_dim
+            expected_input_dim = dims["input"]
+            if input_dim != expected_input_dim:
+                print(f"[RLBot] ⚠️  WARNING: Checkpoint has input_dim={input_dim}, expected {expected_input_dim}")
+                print(f"[RLBot]          This checkpoint may have been trained with wrong state vector!")
+                print(f"[RLBot]          Loading with actual dimensions: {input_dim}")
+        else:
+            input_dim = dims["input"]
+
+        # Select state vector function based on actual dimensions
+        # This handles legacy checkpoints that might have been trained with wrong state vectors
+        actual_state_dim = input_dim - 6  # Remove action vector size
+        if actual_state_dim == 972:
             self._state_fn = state_to_vector_v2
+            print(f"[RLBot] Using state_to_vector_v2 (972 dims)")
         else:
             self._state_fn = state_to_vector
+            print(f"[RLBot] Using state_to_vector (648 dims)")
+
+        # Debug: show version and final input_dim being used
+        print(f"[RLBot] Loaded {checkpoint_path} as RL {self.version.upper()}, input_dim={input_dim}")
 
         # Build the right architecture based on version
         if self.version == "v2":
