@@ -28,7 +28,8 @@ class GameConfig:
     minimax_depth: int = 2
     rl_checkpoint: Optional[str] = None
     human_player: int = 1              # 1 or 2
-    map_name: str = "standard"         # "standard", "balanced", "empty", "small_5x5"
+    map_name: str = "standard"         # "standard", "balanced", "empty", "small_5x5", "custom"
+    custom_game_state: object = None   # GameState from board builder (when map_name="custom")
 
 
 # ---------------------------------------------------------------------------
@@ -336,6 +337,7 @@ class _MapScreen(_Menu):
             ("Balanced", "Symmetrical layout (9x9)", "balanced", True),
             ("Empty", "No obstacles (9x9)", "empty", True),
             ("Small 5x5", "Quick game on a smaller board", "small_5x5", True),
+            ("Custom", "Build your own board", "custom", True),
         ]
         def draw(click):
             nonlocal btns
@@ -401,12 +403,10 @@ class ModeSelector:
 
             elif state == "bot_config":
                 if config.bot_type in ("minimax_v1", "minimax_v2"):
-                    r = _DepthScreen(screen, clock).run()
-                    if r == "__quit__":
-                        return None
-                    if r == "__back__":
-                        state = "bot_type"; continue
-                    config.minimax_depth = r
+                    # Depth is adjustable in-game with D / Shift+D
+                    config.minimax_depth = 3
+                    state = "side"
+                    continue
                 else:
                     cks = ck_v1 if config.bot_type == "rl_v1" else ck_v2
                     r = _RLTierScreen(screen, clock, cks).run()
@@ -434,5 +434,19 @@ class ModeSelector:
                 if r == "__back__":
                     state = "side" if config.mode == "pvbot" else "mode"
                     continue
+                if r == "custom":
+                    state = "builder"
+                    continue
                 config.map_name = r
+                return config
+
+            elif state == "builder":
+                from board_builder import BoardBuilderScreen
+                result = BoardBuilderScreen(screen, clock).run()
+                if result == "__quit__":
+                    return None
+                if result == "__back__":
+                    state = "map"; continue
+                config.map_name = "custom"
+                config.custom_game_state = result
                 return config

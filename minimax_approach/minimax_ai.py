@@ -1,8 +1,6 @@
 from dotscuts import GameState
 from ai_core import Action, generate_legal_actions, generate_all_actions, execute_action
 import random
-
-import pandas as pd
 import numpy as np
 
 def evaluate_position_v1(game_state: GameState, current_player: int,
@@ -239,16 +237,18 @@ def minimax(game_state: GameState, depth: int, alpha: float, beta: float, maximi
     evaluate_position = MINIMAX_VERSIONS[version]["evaluate_position"]
 
     game_over, winner = game_state.is_game_over()
-    player = root_player if maximizing_player else (2 if root_player == 1 else 1)
-    opponent = 2 if player == 1 else 1
 
     if game_over:
-        if winner == player:
+        # Terminal evaluation is always from root_player's perspective:
+        # root_player wins → +inf, root_player loses → -inf
+        if winner == root_player:
             return float("inf")
-        elif winner == opponent:
+        elif winner is not None:
             return float("-inf")
         else:
-            return 0 # Draw
+            return 0  # Draw
+
+    player = root_player if maximizing_player else (2 if root_player == 1 else 1)
         
     if depth == 0:
         return evaluate_position(game_state, root_player)
@@ -334,6 +334,7 @@ def minimax_best_move(game_state: GameState, player: int, depth: int, version: s
 if __name__ == "__main__":
 
     ###### WEIGHTS ANALYSIS ##############
+    import pandas as pd
 
     # Carica il CSV
     df = pd.read_csv("feature_log_v2_depth2.csv")

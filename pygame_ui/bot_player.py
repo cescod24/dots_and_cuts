@@ -24,6 +24,7 @@ sys.path.insert(0, os.path.join(_base, ".."))
 from dotscuts import GameState
 from ai_core import (Action, generate_all_actions, execute_action,
                      action_to_vector, state_to_vector, state_to_vector_v2)
+from move_notation import action_to_notation
 
 
 # ---------------------------------------------------------------------------
@@ -48,13 +49,16 @@ class MinimaxBot:
     def get_best_action(self, game_state: GameState, player: int) -> Action:
         return self._minimax_best_move(game_state, player, self.depth, version=self.version)
 
-    def get_top_k_actions(self, game_state: GameState, player: int, k: int = 3):
+    def get_top_k_actions(self, game_state: GameState, player: int, k: int = 3,
+                          depth: int = None):
         """
         Evaluate every legal action with minimax and return the top k.
         Returns list of (Action, score, is_best).
+        depth: override search depth (None = use self.depth).
         """
         from minimax_approach.minimax_ai import minimax as _mm
 
+        d = depth if depth is not None else self.depth
         actions = generate_all_actions(game_state, player)
         if not actions:
             return []
@@ -62,7 +66,7 @@ class MinimaxBot:
         scored = []
         for action in actions:
             execute_action(game_state, action)
-            score = _mm(game_state, self.depth - 1,
+            score = _mm(game_state, d - 1,
                         alpha=float("-inf"), beta=float("inf"),
                         maximizing_player=False,
                         root_player=player,
@@ -211,8 +215,19 @@ class RLBot:
         top = self.get_top_k_actions(game_state, player, k=1)
         return top[0][0] if top else None
 
-    def get_top_k_actions(self, game_state: GameState, player: int, k: int = 3):
+    def get_top_k_actions(self, game_state: GameState, player: int, k: int = 3,
+                          depth: int = None):
         import torch
+
+        # RL models are trained on 9x9 boards — reject mismatched sizes
+        expected_N = 9
+        actual_N = game_state.board.size
+        if actual_N != expected_N:
+            raise ValueError(
+                f"RL bot was trained on {expected_N}x{expected_N} boards, "
+                f"but current board is {actual_N}x{actual_N}. "
+                f"Use Minimax for non-standard board sizes."
+            )
 
         actions = generate_all_actions(game_state, player)
         if not actions:
@@ -260,11 +275,12 @@ def create_bot(config) -> "MinimaxBot | RLBot":
 # ---------------------------------------------------------------------------
 # Shared helpers
 # ---------------------------------------------------------------------------
-def _format_action(action: Action) -> str:
-    kind = "O" if action.piece.kind == "orthogonal" else "D"
-    src = f"({action.piece.x},{action.piece.y})"
-    dst = f"({action.target_x},{action.target_y})"
-    if action.action_type == "move":
-        return f"{kind} {src} -> {dst}"
-    else:
-        return f"{kind} {src} => {dst}"
+def _format_action(action: Action, game_state=None) -> str:
+    """Format action using algebraic notation if game_state is available."""
+    if game_state is not None:
+        return action_to_notation(action, game_state)
+    # Fallback: notation without disambiguation
+    symbol = "/" if action.piece.kind == "diagonal" else "-"
+    x_mark = "x" if action.action_type == "shoot" else ""
+    tx, ty = action.target_x, action.target_y
+    return f"{symbol}{x_mark}{tx}{ty}"

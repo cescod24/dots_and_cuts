@@ -470,10 +470,12 @@ class Piece:
         if dx == 0 and dy == 0:
             return False  # same position
 
-        # Direction rules
-        if self.kind == "diagonal" and not (dx == 0 or dy == 0):
-            return False
+        # Direction rules (OPPOSITE of movement direction)
+        # Orthogonal pieces MOVE along rows/columns but SHOOT along diagonals
+        # Diagonal pieces MOVE along diagonals but SHOOT along rows/columns
         if self.kind == "orthogonal" and abs(dx) != abs(dy):
+            return False
+        if self.kind == "diagonal" and not (dx == 0 or dy == 0):
             return False
 
         # Normalize direction
@@ -484,9 +486,22 @@ class Piece:
         z_start = game_state.board.z[self.y][self.x]
         z_end = game_state.board.z[target_y][target_x]
 
+        # Valid z_start/z_end combinations (applies even for distance-1 shots):
+        # 1->1, 1->0, -1->-1, 0->0, 0->1  are allowed.
+        # -1->0, -1->1, 0->-1, 1->-1  are always illegal.
+        valid_combo = (
+            (z_start == 1  and z_end in (1, 0)) or
+            (z_start == -1 and z_end == -1)     or
+            (z_start == 0  and z_end in (0, 1))
+        )
+        if not valid_combo:
+            return False
+
         while (current_x, current_y) != (target_x, target_y):
             current_x += step_x
             current_y += step_y
+            if (current_x, current_y) == (target_x, target_y):
+                break
             z_mid = game_state.board.z[current_y][current_x]
 
             # z rules
@@ -510,7 +525,7 @@ class Piece:
                     return False
             else:
                 #print("Failed shooting attempt (-1 -> 0, 0->-1, 1->-1, -1->1)")
-                return False
+                return False # ridondante ma ci sta sempre
 
         return True
 

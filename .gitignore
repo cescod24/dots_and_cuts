@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# macOS
+.DS_Store
+
+# RL (entire research pipeline — kept locally)
+RL_approach/
+checkpoints/
+
+# Minimax feature logs (generated)
+minimax_approach/feature_log*.csv
+
+# Research docs (kept locally)
+RL_APPROACH.md
+VERSION_ORGANIZATION.md
+BUG_FIX_Z_INDEX.md
+PROJECT_SUMMARY.md
+DOCUMENTATION.md
+
+# Generated
+training_log.csv
+training_analysis_v1.png
+results.txt
+qdiag.py
