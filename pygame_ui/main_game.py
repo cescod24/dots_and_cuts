@@ -204,7 +204,8 @@ class GameUI:
         self.selected_piece = None
         self.legal_moves = set()
         self.legal_shoots = set()
-        self.show_bot_thinking = True
+        self.show_bot_thinking = True      # 0=off, 1=best only, 2=top3+worst, 3=full lines
+        self.bot_thinking_mode = 3
         self.show_grid = False
         self.show_z_hints = False
         self.game_over = False
@@ -224,6 +225,9 @@ class GameUI:
         self._pv_cancel = threading.Event()
         self._pv_timeout = 10          # seconds, adjustable with T/Shift+T
         self._pv_computing = False
+
+        # Bot turn pending (render one frame before bot thinks)
+        self._bot_pending = False
 
         # Move tree
         MoveNode._next_id = 0
@@ -640,9 +644,11 @@ class GameUI:
                     elif event.key == pygame.K_u:
                         self._handle_undo()
                     elif event.key == pygame.K_b:
-                        self.show_bot_thinking = not self.show_bot_thinking
+                        self.bot_thinking_mode = (self.bot_thinking_mode + 1) % 4
+                        self.show_bot_thinking = self.bot_thinking_mode > 0
                         self._refresh_analysis()
-                        self._show(f"Bot thinking: {'ON' if self.show_bot_thinking else 'OFF'}")
+                        labels = {0: 'OFF', 1: 'best move', 2: 'top 3 + worst', 3: 'full lines'}
+                        self._show(f"Analysis: {labels[self.bot_thinking_mode]}")
                     elif event.key == pygame.K_g:
                         self.show_grid = not self.show_grid
                         self._show(f"Grid edges: {'ON' if self.show_grid else 'OFF'}")
@@ -665,7 +671,7 @@ class GameUI:
                         mods = pygame.key.get_mods()
                         if self.bot and hasattr(self.bot, 'depth'):
                             if mods & pygame.KMOD_SHIFT:
-                                self.bot.depth = min(10, self.bot.depth + 1)
+                                self.bot.depth = self.bot.depth + 1
                             else:
                                 self.bot.depth = max(1, self.bot.depth - 1)
                             self.bot.label = f"Minimax {self.bot.version} (depth {self.bot.depth})"
@@ -679,9 +685,13 @@ class GameUI:
                             self._pv_timeout = max(1, self._pv_timeout - 5)
                         self._show(f"Analysis timeout: {self._pv_timeout}s")
 
-            # Bot turn
-            if self._is_bot_turn() and not self.game_over:
+            # Bot turn: wait one frame so the human move renders first
+            if self._bot_pending:
+                self._bot_pending = False
                 self._do_bot_turn()
+            elif self._is_bot_turn() and not self.game_over:
+                self._bot_pending = True
+                self._show("Bot thinking...")
 
             # Tick message timer
             if self.message_timer > 0:
@@ -696,8 +706,26 @@ class GameUI:
             ec = self._eval_cache or {}
             pv_data = None
             if self.show_bot_thinking:
+                raw_lines = ec.get('pv_lines', [])
+                if self.bot_thinking_mode == 1:
+                    # Best move only: just the 1st line, first move
+                    if raw_lines:
+                        text = raw_lines[0].get('text', '')
+                        first_move = text.split(' ')[0] if text else ''
+                        raw_lines = [{**raw_lines[0], 'text': first_move}]
+                    else:
+                        raw_lines = []
+                elif self.bot_thinking_mode == 2:
+                    # Top 3 + worst: first move only for each
+                    truncated = []
+                    for line in raw_lines:
+                        text = line.get('text', '')
+                        first_move = text.split(' ')[0] if text else ''
+                        truncated.append({**line, 'text': first_move})
+                    raw_lines = truncated
+                # mode 3: full lines, no changes
                 pv_data = {
-                    'lines': ec.get('pv_lines', []),
+                    'lines': raw_lines,
                     'computing': self._pv_computing,
                 }
             self.display.draw_frame(
