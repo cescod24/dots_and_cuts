@@ -13,12 +13,8 @@ checkpoints/
 # Minimax feature logs (generated)
 minimax_approach/feature_log*.csv
 
-# Research docs (kept locally)
-RL_APPROACH.md
-VERSION_ORGANIZATION.md
-BUG_FIX_Z_INDEX.md
-PROJECT_SUMMARY.md
-DOCUMENTATION.md
+# Research docs at root (old location, now in documentation/)
+# documentation/ folder IS tracked
 
 # Generated
 training_log.csv
