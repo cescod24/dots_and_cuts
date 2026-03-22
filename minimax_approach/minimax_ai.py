@@ -3,6 +3,11 @@ from ai_core import Action, generate_legal_actions, generate_all_actions, execut
 import random
 import numpy as np
 
+# Terminal scores: large finite values instead of inf so we can encode
+# distance-to-mate. Higher depth remaining = found sooner = prefer it.
+# Win: prefer faster (WIN_SCORE + depth). Loss: prefer slower (-WIN_SCORE - depth).
+WIN_SCORE = 100 ## figo però che in python puoi scrivere _ tra le cifre per leggibilità, es: 100_000_000
+
 def evaluate_position_v1(game_state: GameState, current_player: int,
                          weights, means, stds, intercept) -> float:
     """
@@ -230,6 +235,63 @@ MINIMAX_VERSIONS = {
     },
 }
 
+def quiescence(game_state: GameState, alpha: float, beta: float, maximizing_player: bool, root_player: int, evaluate_position, depth: int = 0) -> float:
+    """
+    Quiescence search: resolve current player's shoot actions before static eval.
+    If current player has no shoots, position is quiet → return eval.
+    Opponent's shoots are handled when it's their turn.
+    depth continues counting down (into negatives) from minimax's depth=0.
+    """
+    game_over, winner = game_state.is_game_over()
+    if game_over:
+        if winner == root_player:
+            return WIN_SCORE + depth
+        elif winner is not None:
+            return -(WIN_SCORE + depth)
+        else:
+            return 0
+
+    player = root_player if maximizing_player else (2 if root_player == 1 else 1)
+
+    # Get shoot actions for current player only
+    my_shoots = []
+    for piece in [p for p in game_state.pieces if p.player == player]:
+        for a in generate_legal_actions(game_state, piece):
+            if hasattr(a, 'action_type') and a.action_type == "shoot":
+                my_shoots.append(a)
+
+    # No shoots for current player → position is quiet → return eval
+    if not my_shoots:
+        return evaluate_position(game_state, root_player)
+
+    # Current player has shoots: try them all, pick best.
+    # No stand pat — in this game shooting is (almost) always beneficial,
+    # and stand pat would be inflated by shooting_diff counting the very
+    # shoots being resolved here.
+    if maximizing_player:
+        max_eval = float("-inf")
+        for action in my_shoots:
+            execute_action(game_state, action)
+            score = quiescence(game_state, alpha, beta, False, root_player, evaluate_position, depth - 1)
+            game_state.undo_last_move()
+            max_eval = max(max_eval, score)
+            alpha = max(alpha, max_eval)
+            if alpha >= beta:
+                break
+        return max_eval
+    else:
+        min_eval = float("inf")
+        for action in my_shoots:
+            execute_action(game_state, action)
+            score = quiescence(game_state, alpha, beta, True, root_player, evaluate_position, depth - 1)
+            game_state.undo_last_move()
+            min_eval = min(min_eval, score)
+            beta = min(beta, min_eval)
+            if beta <= alpha:
+                break
+        return min_eval
+
+
 def minimax(game_state: GameState, depth: int, alpha: float, beta: float, maximizing_player: bool, root_player: int, version: str = "v1") -> float:
     """
     Minimax with AB pruning, supporting multiple AI versions.
@@ -239,19 +301,19 @@ def minimax(game_state: GameState, depth: int, alpha: float, beta: float, maximi
     game_over, winner = game_state.is_game_over()
 
     if game_over:
-        # Terminal evaluation is always from root_player's perspective:
-        # root_player wins → +inf, root_player loses → -inf
+        # Depth-adjusted terminal scores: prefer fast wins, slow losses.
+        # Higher depth remaining = found closer to root = sooner.
         if winner == root_player:
-            return float("inf")
+            return WIN_SCORE + depth   # fast win > slow win
         elif winner is not None:
-            return float("-inf")
+            return -(WIN_SCORE + depth) # slow loss > fast loss (delay = hope)
         else:
             return 0  # Draw
 
     player = root_player if maximizing_player else (2 if root_player == 1 else 1)
-        
+
     if depth == 0:
-        return evaluate_position(game_state, root_player)
+        return quiescence(game_state, alpha, beta, maximizing_player, root_player, evaluate_position, depth)
     
     if maximizing_player:
         player_actions = generate_all_actions(game_state, player)

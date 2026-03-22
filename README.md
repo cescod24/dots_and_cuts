@@ -22,7 +22,6 @@ python pygame_ui/main_game.py
 
 - **Player vs Player** — local 1v1
 - **Player vs Bot** — play against Minimax AI (configurable depth)
-- **Bot vs Bot** — watch two bots play
 
 ## Controls
 
