@@ -4,27 +4,27 @@ Move Notation for Dots & Cuts
 Algebraic notation system for recording and displaying game moves.
 
 Symbol:
-    / = diagonal piece
-    - = orthogonal piece
+    x = diagonal piece
+    + = orthogonal piece
 
 Coordinates: xy (column x, row y). Single digit for 0-9.
     For coords >= 10: a=10, b=11, c=12.
 
 Format:
-    <symbol>[rank][source][x]<target>[x][.]
+    <symbol>[rank][source][!]<target>[!][.]
 
-    /33         diagonal moves to (3,3)
-    -x23        orthogonal captures at (2,3)
-    /x33x       diagonal captures at (3,3) and also dies (collapse)
-    /2233       diagonal from (2,2) to (3,3) — disambiguated by source
-    /22x33      diagonal from (2,2) captures at (3,3)
-    -133        first orthogonal (by arrival order) moves to (3,3)
-    -110x20x    first orth from (1,0) captures at (2,0), self dies
-    -x50.       orthogonal captures at (5,0), game ends
+    x33         diagonal moves to (3,3)
+    +!23        orthogonal captures at (2,3)
+    x!33!       diagonal captures at (3,3) and also dies (collapse)
+    x2233       diagonal from (2,2) to (3,3) — disambiguated by source
+    x22!33      diagonal from (2,2) captures at (3,3)
+    +133        first orthogonal (by arrival order) moves to (3,3)
+    +110!20!    first orth from (1,0) captures at (2,0), self dies
+    +!50.       orthogonal captures at (5,0), game ends
 
 Turn format:
-    1. /33 -23       turn 1: P1 diagonal to 33, P2 orthogonal to 23
-    1. ... -22       turn 1: only the second half-move shown
+    1. x33 +23       turn 1: P1 diagonal to 33, P2 orthogonal to 23
+    1. ... +22       turn 1: only the second half-move shown
 """
 
 from ai_core import generate_legal_actions, Action
@@ -46,8 +46,8 @@ def _coord_str(x, y):
 
 
 def _piece_symbol(piece):
-    """/ for diagonal, - for orthogonal."""
-    return "/" if piece.kind == "diagonal" else "-"
+    """x for diagonal, + for orthogonal."""
+    return "x" if piece.kind == "diagonal" else "+"
 
 
 # ---------------------------------------------------------------------------
@@ -109,7 +109,7 @@ def action_to_notation(action, game_state, capture_result=None, game_over=False)
                         If None, inferred from action_type and board state.
         game_over:      True if this move ends the game
 
-    Returns: notation string (e.g. "/33", "-x23", "/2233")
+    Returns: notation string (e.g. "x33", "+!23", "x2233")
     """
     piece = action.piece
     symbol = _piece_symbol(piece)
@@ -153,10 +153,10 @@ def action_to_notation(action, game_state, capture_result=None, game_over=False)
     if need_source:
         result += _coord_str(piece.x, piece.y)
     if is_capture:
-        result += "x"
+        result += "!"
     result += _coord_str(tx, ty)
     if self_died:
-        result += "x"
+        result += "!"
     if game_over:
         result += "."
 

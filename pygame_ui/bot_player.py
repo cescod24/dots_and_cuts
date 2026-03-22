@@ -280,7 +280,7 @@ def _format_action(action: Action, game_state=None) -> str:
     if game_state is not None:
         return action_to_notation(action, game_state)
     # Fallback: notation without disambiguation
-    symbol = "/" if action.piece.kind == "diagonal" else "-"
-    x_mark = "x" if action.action_type == "shoot" else ""
+    symbol = "x" if action.piece.kind == "diagonal" else "+"
+    cap_mark = "!" if action.action_type == "shoot" else ""
     tx, ty = action.target_x, action.target_y
-    return f"{symbol}{x_mark}{tx}{ty}"
+    return f"{symbol}{cap_mark}{tx}{ty}"

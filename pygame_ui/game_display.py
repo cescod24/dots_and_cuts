@@ -253,14 +253,20 @@ class GameDisplay:
         if sel:
             pygame.draw.rect(self.screen, (255,255,255), rect, 2, border_radius=3)
 
-        # Draw kind symbol as line for better visibility
+        # Draw kind symbol: + for orthogonal, x for diagonal
         line_len = max(4, int(sz * 0.65))
         line_w = max(2, int(sz * 0.18))
+        w = (255, 255, 255)
         if piece.kind == "orthogonal":
-            pygame.draw.line(self.screen, (255, 255, 255),
+            pygame.draw.line(self.screen, w,
                              (px - line_len, py), (px + line_len, py), line_w)
+            pygame.draw.line(self.screen, w,
+                             (px, py - line_len), (px, py + line_len), line_w)
         else:
-            pygame.draw.line(self.screen, (255, 255, 255),
+            pygame.draw.line(self.screen, w,
+                             (px - line_len, py - line_len),
+                             (px + line_len, py + line_len), line_w)
+            pygame.draw.line(self.screen, w,
                              (px - line_len, py + line_len),
                              (px + line_len, py - line_len), line_w)
 

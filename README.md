@@ -42,7 +42,7 @@ python pygame_ui/main_game.py
 
 ## Rules
 
-- Each player starts with 2 pieces: one orthogonal (—) and one diagonal (/)
+- Each player starts with 2 pieces: one orthogonal (+) and one diagonal (x)
 - **Orthogonal pieces** move along rows/columns, shoot along diagonals
 - **Diagonal pieces** move along diagonals, shoot along rows/columns
 - Moving creates an edge trail — you cannot cross your own trail

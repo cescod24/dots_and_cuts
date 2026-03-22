@@ -471,7 +471,9 @@ class GameUI:
         # Convert to P1-relative for bar display (P1 green = bottom).
         cur_q = all_scored[0][1] if all_scored else 0
         p1_adv = cur_q if player == 1 else -cur_q
-        bar_pct = 1 / (1 + _math.exp(-p1_adv * 10))
+        # Clamp before sigmoid to avoid OverflowError (WIN_SCORE=100 * 10 overflows exp)
+        clamped = max(-10.0, min(10.0, p1_adv * 10))
+        bar_pct = 1 / (1 + _math.exp(-clamped))
         bar_pct = max(0.03, min(0.97, bar_pct))
         result['eval_data'] = {
             'bar_pct': bar_pct,
