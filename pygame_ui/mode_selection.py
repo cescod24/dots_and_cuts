@@ -28,7 +28,7 @@ class GameConfig:
     minimax_depth: int = 2
     rl_checkpoint: Optional[str] = None
     human_player: int = 1              # 1 or 2
-    map_name: str = "standard"         # "standard", "balanced", "empty", "small_5x5", "custom"
+    map_name: str = "standard"         # "standard", "balanced", "skirmish", "mid_7x7", "small_5x5", "custom"
     custom_game_state: object = None   # GameState from board builder (when map_name="custom")
 
 
@@ -335,7 +335,8 @@ class _MapScreen(_Menu):
         items = [
             ("Standard", "Random towers & bunkers (9x9)", "standard", True),
             ("Balanced", "Symmetrical layout (9x9)", "balanced", True),
-            ("Empty", "No obstacles (9x9)", "empty", True),
+            ("Skirmish", "4 pieces each, random obstacles (9x9)", "skirmish", True),
+            ("Mid 7x7", "3 pieces each, random obstacles (7x7)", "mid_7x7", True),
             ("Small 5x5", "Quick game on a smaller board", "small_5x5", True),
             ("Custom", "Build your own board", "custom", True),
         ]

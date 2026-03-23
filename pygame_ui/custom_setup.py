@@ -169,17 +169,85 @@ class PrebuiltSetups:
         return builder.build()
 
     @staticmethod
-    def empty_board() -> GameState:
+    def skirmish_9x9() -> GameState:
         """
-        Empty board for testing - no obstacles.
+        Standard 9x9 with random obstacles and 4 pieces per player.
+        Extra orthogonal + diagonal in more central positions.
         """
-        builder = GameSetupBuilder(size=9)
+        import random
+        from dotscuts import Board
+        board = Board(9)
+        size = 9
+        cell_coords = [(x, y) for x in range(size - 1) for y in range(size - 1)]
+        corners = {(0, 0), (0, size - 2), (size - 2, 0), (size - 2, size - 2)}
+        n_towers = random.randint(5, 10)
+        n_bunkers = random.randint(10, 15)
+        n_lakes = random.randint(0, 1)
+        possible_lake_cells = [pos for pos in cell_coords if pos not in corners]
+        lake_positions = set(random.sample(possible_lake_cells, n_lakes))
+        remaining_for_towers = [pos for pos in cell_coords if pos not in lake_positions]
+        tower_positions = set(random.sample(remaining_for_towers, n_towers))
+        remaining_for_bunkers = [pos for pos in cell_coords if pos not in lake_positions and pos not in tower_positions]
+        bunker_positions = set(random.sample(remaining_for_bunkers, n_bunkers))
+        for x, y in tower_positions:
+            board.place_tower(x, y)
+        for x, y in bunker_positions:
+            board.place_bunker(x, y)
+        for x, y in lake_positions:
+            board.place_lake(x, y)
 
-        # Just add pieces
+        builder = GameSetupBuilder(size=9)
+        builder.board = board
+        # Standard pieces (corners)
         builder.add_piece(8, 7, 8, 8, "orthogonal", 1)
         builder.add_piece(1, 7, 0, 8, "diagonal", 1)
         builder.add_piece(0, 1, 0, 0, "orthogonal", 2)
         builder.add_piece(7, 1, 8, 0, "diagonal", 2)
+        # Extra pieces (central)
+        builder.add_piece(4, 6, 4, 7, "orthogonal", 1)
+        builder.add_piece(5, 5, 4, 6, "diagonal", 1)
+        builder.add_piece(4, 2, 4, 1, "orthogonal", 2)
+        builder.add_piece(3, 3, 4, 2, "diagonal", 2)
+
+        return builder.build()
+
+    @staticmethod
+    def mid_7x7() -> GameState:
+        """
+        Mid-size 7x7 with random obstacles and 3 pieces per player.
+        """
+        import random
+        from dotscuts import Board
+        board = Board(7)
+        size = 7
+        cell_coords = [(x, y) for x in range(size - 1) for y in range(size - 1)]
+        corners = {(0, 0), (0, size - 2), (size - 2, 0), (size - 2, size - 2)}
+        n_towers = random.randint(3, 6)
+        n_bunkers = random.randint(5, 10)
+        n_lakes = random.randint(0, 1)
+        possible_lake_cells = [pos for pos in cell_coords if pos not in corners]
+        lake_positions = set(random.sample(possible_lake_cells, n_lakes))
+        remaining_for_towers = [pos for pos in cell_coords if pos not in lake_positions]
+        tower_positions = set(random.sample(remaining_for_towers, n_towers))
+        remaining_for_bunkers = [pos for pos in cell_coords if pos not in lake_positions and pos not in tower_positions]
+        bunker_positions = set(random.sample(remaining_for_bunkers, n_bunkers))
+        for x, y in tower_positions:
+            board.place_tower(x, y)
+        for x, y in bunker_positions:
+            board.place_bunker(x, y)
+        for x, y in lake_positions:
+            board.place_lake(x, y)
+
+        builder = GameSetupBuilder(size=7)
+        builder.board = board
+        # P1: corner pieces + central
+        builder.add_piece(6, 5, 6, 6, "orthogonal", 1)
+        builder.add_piece(1, 5, 0, 6, "diagonal", 1)
+        builder.add_piece(3, 4, 3, 5, "orthogonal", 1)
+        # P2: corner pieces + central
+        builder.add_piece(0, 1, 0, 0, "orthogonal", 2)
+        builder.add_piece(5, 1, 6, 0, "diagonal", 2)
+        builder.add_piece(3, 2, 3, 1, "orthogonal", 2)
 
         return builder.build()
 
@@ -315,14 +383,14 @@ class InteractiveSetupBuilder:
         print("\nAvailable presets:")
         print("1) Standard 9x9 (random)")
         print("2) Balanced 9x9 (symmetrical)")
-        print("3) Empty board")
-        print("4) Small 5x5")
+        print("3) Skirmish 9x9 (4 pieces each)")
+        print("4) Mid 7x7 (3 pieces each)")
+        print("5) Small 5x5")
 
-        choice = input("Choose preset (1-4): ").strip()
+        choice = input("Choose preset (1-5): ").strip()
 
         if choice == '1':
             self.builder = GameSetupBuilder(size=9)
-            # Randomize and build
             from dotscuts import setup_standard_game
             return setup_standard_game()
         elif choice == '2':
@@ -330,8 +398,11 @@ class InteractiveSetupBuilder:
             return PrebuiltSetups.balanced_9x9()
         elif choice == '3':
             self.builder = GameSetupBuilder(size=9)
-            return PrebuiltSetups.empty_board()
+            return PrebuiltSetups.skirmish_9x9()
         elif choice == '4':
+            self.builder = GameSetupBuilder(size=7)
+            return PrebuiltSetups.mid_7x7()
+        elif choice == '5':
             self.builder = GameSetupBuilder(size=5)
             return PrebuiltSetups.small_5x5()
 

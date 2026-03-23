@@ -88,6 +88,11 @@ class BoardBuilderScreen:
         # Piece placement state: waiting for tail after position click
         self.pending_piece = None  # {kind, player, pos_x, pos_y}
 
+        # Random obstacle counts
+        self.rand_towers = 5
+        self.rand_bunkers = 10
+        self.rand_lakes = 0
+
         self._recompute_layout()
 
     # ----- layout -----
@@ -235,6 +240,44 @@ class BoardBuilderScreen:
             if self.tool in ("p1_orth", "p1_diag", "p2_orth", "p2_diag"):
                 self._start_piece(vx, vy)
 
+    # ----- randomize obstacles -----
+
+    def _randomize_obstacles(self):
+        import random
+        b = self.builder.board
+        sz = self.board_size
+        # Clear existing obstacles
+        for cy in range(sz - 1):
+            for cx in range(sz - 1):
+                b.towers[cy][cx] = False
+                b.bunkers[cy][cx] = False
+                b.lakes[cy][cx] = False
+        b.recompute_z()
+
+        cell_coords = [(x, y) for x in range(sz - 1) for y in range(sz - 1)]
+        corners = {(0, 0), (0, sz - 2), (sz - 2, 0), (sz - 2, sz - 2)}
+        total_cells = len(cell_coords)
+
+        n_towers = min(self.rand_towers, total_cells)
+        n_lakes = min(self.rand_lakes, total_cells - n_towers)
+        n_bunkers = min(self.rand_bunkers, total_cells - n_towers - n_lakes)
+
+        possible_lake = [p for p in cell_coords if p not in corners]
+        lake_pos = set(random.sample(possible_lake, min(n_lakes, len(possible_lake))))
+        remaining = [p for p in cell_coords if p not in lake_pos]
+        tower_pos = set(random.sample(remaining, min(n_towers, len(remaining))))
+        remaining = [p for p in remaining if p not in tower_pos]
+        bunker_pos = set(random.sample(remaining, min(n_bunkers, len(remaining))))
+
+        for x, y in tower_pos:
+            b.place_tower(x, y)
+        for x, y in bunker_pos:
+            b.place_bunker(x, y)
+        for x, y in lake_pos:
+            b.place_lake(x, y)
+
+        self._msg(f"Randomized: {len(tower_pos)}T {len(bunker_pos)}B {len(lake_pos)}L")
+
     # ----- click dispatch -----
 
     def _handle_click(self, pos):
@@ -323,7 +366,7 @@ class BoardBuilderScreen:
             col = C["p1"] if pc["player"] == 1 else C["p2"]
             rect = pygame.Rect(px - psz, py - psz, psz * 2, psz * 2)
             pygame.draw.rect(self.screen, col, rect, border_radius=3)
-            label = "O" if pc["kind"] == "orthogonal" else "D"
+            label = "+" if pc["kind"] == "orthogonal" else "x"
             txt = self.f_tiny.render(label, True, (255, 255, 255))
             self.screen.blit(txt, txt.get_rect(center=(px, py)))
 
@@ -418,8 +461,41 @@ class BoardBuilderScreen:
             self.screen.blit(self.f_sm.render(f"{label}: {val}", True, C["text_dim"]), (x, y))
             y += 16
 
+        # Random obstacle controls
+        y += 10
+        pygame.draw.line(self.screen, C["divider"], (x, y), (x + PANEL_W - 28, y))
+        y += 8
+        self.screen.blit(self.f_md.render("Random Obstacles", True, C["text_dim"]), (x, y))
+        y += 20
+
+        self._rand_rects = {}
+        max_cells = max(1, (self.board_size - 1) ** 2)
+        for key, label, val in [("towers", "Towers", self.rand_towers),
+                                 ("bunkers", "Bunkers", self.rand_bunkers),
+                                 ("lakes", "Lakes", self.rand_lakes)]:
+            self.screen.blit(self.f_sm.render(f"{label}: {val}", True, C["text"]), (x, y))
+            minus_r = pygame.Rect(x + 110, y - 1, 22, 18)
+            plus_r  = pygame.Rect(x + 136, y - 1, 22, 18)
+            for rect, lbl in [(minus_r, "-"), (plus_r, "+")]:
+                hover = rect.collidepoint(mouse)
+                pygame.draw.rect(self.screen, C["btn_hover"] if hover else C["btn"], rect, border_radius=4)
+                t = self.f_sm.render(lbl, True, C["text"])
+                self.screen.blit(t, t.get_rect(center=rect.center))
+            self._rand_rects[key] = (minus_r, plus_r)
+            y += 22
+
+        y += 4
+        self._randomize_rect = pygame.Rect(x, y, PANEL_W - 28, 26)
+        hover = self._randomize_rect.collidepoint(mouse)
+        bg = C["btn_hover"] if hover else C["btn"]
+        pygame.draw.rect(self.screen, bg, self._randomize_rect, border_radius=6)
+        pygame.draw.rect(self.screen, C["accent"], self._randomize_rect, 1, border_radius=6)
+        t = self.f_sm.render("Randomize", True, C["accent"])
+        self.screen.blit(t, t.get_rect(center=self._randomize_rect.center))
+        y += 34
+
         # Action buttons
-        y = SCREEN_H - 120
+        y += 6
         pygame.draw.line(self.screen, C["divider"], (x, y), (x + PANEL_W - 28, y))
         y += 10
 
@@ -457,6 +533,30 @@ class BoardBuilderScreen:
                 self.pending_piece = None
                 return
 
+        # Random obstacle +/- buttons
+        max_cells = max(1, (self.board_size - 1) ** 2)
+        for key, (minus_r, plus_r) in self._rand_rects.items():
+            if minus_r.collidepoint(pos):
+                if key == "towers":
+                    self.rand_towers = max(0, self.rand_towers - 1)
+                elif key == "bunkers":
+                    self.rand_bunkers = max(0, self.rand_bunkers - 1)
+                elif key == "lakes":
+                    self.rand_lakes = max(0, self.rand_lakes - 1)
+                return
+            if plus_r.collidepoint(pos):
+                if key == "towers":
+                    self.rand_towers = min(max_cells, self.rand_towers + 1)
+                elif key == "bunkers":
+                    self.rand_bunkers = min(max_cells, self.rand_bunkers + 1)
+                elif key == "lakes":
+                    self.rand_lakes = min(max_cells, self.rand_lakes + 1)
+                return
+
+        if self._randomize_rect.collidepoint(pos):
+            self._randomize_obstacles()
+            return
+
         if self._clear_rect.collidepoint(pos):
             self.builder = GameSetupBuilder(size=self.board_size)
             self.pending_piece = None
@@ -478,6 +578,8 @@ class BoardBuilderScreen:
         self._tool_rects = {}
         self._clear_rect = pygame.Rect(0, 0, 0, 0)
         self._done_rect = pygame.Rect(0, 0, 0, 0)
+        self._rand_rects = {}
+        self._randomize_rect = pygame.Rect(0, 0, 0, 0)
 
         while True:
             for ev in pygame.event.get():

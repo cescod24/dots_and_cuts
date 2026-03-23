@@ -168,8 +168,10 @@ def build_game_state(config: GameConfig):
         return setup_standard_game()
     elif config.map_name == "balanced":
         return PrebuiltSetups.balanced_9x9()
-    elif config.map_name == "empty":
-        return PrebuiltSetups.empty_board()
+    elif config.map_name == "skirmish":
+        return PrebuiltSetups.skirmish_9x9()
+    elif config.map_name == "mid_7x7":
+        return PrebuiltSetups.mid_7x7()
     elif config.map_name == "small_5x5":
         return PrebuiltSetups.small_5x5()
     else:
