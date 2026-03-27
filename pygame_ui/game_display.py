@@ -103,7 +103,7 @@ class GameDisplay:
 
     def draw_frame(self, game_state, current_player, *,
                    selected_piece=None, legal_moves=None, legal_shoots=None,
-                   pv_lines=None, bot_label="", message="",
+                   pv_lines=None, bot_label="", analysis_label="", message="",
                    game_over=False, winner=None,
                    show_grid=False, show_z_hints=False,
                    timeline_items=None, timeline_scroll=0,
@@ -119,7 +119,7 @@ class GameDisplay:
         self._draw_pieces(game_state, selected_piece)
         self._draw_move_suggestions(my_best_move, opp_best_move)
         self._draw_eval_bar(eval_data)
-        self._draw_panel(current_player, pv_lines, bot_label,
+        self._draw_panel(current_player, pv_lines, bot_label, analysis_label,
                          message, game_over, winner, game_state,
                          show_grid, show_z_hints,
                          timeline_items, timeline_scroll,
@@ -368,7 +368,7 @@ class GameDisplay:
 
     # ---- right panel ----
 
-    def _draw_panel(self, cur_player, pv_lines, bot_label,
+    def _draw_panel(self, cur_player, pv_lines, bot_label, analysis_label,
                     msg, game_over, winner, gs, show_grid, show_z,
                     timeline_items, timeline_scroll,
                     show_eval=False, show_my_best=False, show_opp_best=False):
@@ -404,7 +404,11 @@ class GameDisplay:
         if bot_label:
             self.screen.blit(self.font_md.render(
                 f"Bot: {bot_label}", True, self.COLORS["text_dim"]), (x, y))
-            y += 22
+            y += 20
+        if analysis_label:
+            self.screen.blit(self.font_md.render(
+                f"Analysis: {analysis_label}", True, self.COLORS["text_dim"]), (x, y))
+            y += 20
 
         y += 4
         pygame.draw.line(self.screen, self.COLORS["divider"], (x, y), (x + self.PANEL_WIDTH - 28, y))
@@ -443,7 +447,7 @@ class GameDisplay:
                             timeline_items, timeline_scroll)
 
         # --- Bottom section: toggles + controls ---
-        y2 = self.height - 136
+        y2 = self.height - 160
         pygame.draw.line(self.screen, self.COLORS["divider"], (x, y2), (x + self.PANEL_WIDTH - 28, y2))
         y2 += 8
 
@@ -462,7 +466,9 @@ class GameDisplay:
         y2 += 16
 
         for line in ["Click=Select/Act  U=Undo  R=Restart",
-                      "B=PV  D/D+=Depth  T/T+=Time  Q=Menu"]:
+                      "B=Lines  D / Shift+D = Bot depth -/+",
+                      "A / Shift+A = Analysis depth -/+",
+                      "T / Shift+T = Lines timeout -/+  Q=Menu"]:
             self.screen.blit(self.font_sm.render(line, True, self.COLORS["text_dim"]), (x, y2))
             y2 += 16
 

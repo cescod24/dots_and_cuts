@@ -28,7 +28,7 @@ from dotscuts import setup_standard_game
 from ai_core import Action, execute_action
 from move_notation import action_to_notation, notation_after_execution
 from game_display import GameDisplay
-from bot_player import create_bot
+from bot_player import create_bot, MinimaxBot
 from custom_setup import PrebuiltSetups
 from mode_selection import ModeSelector, GameConfig
 
@@ -194,12 +194,20 @@ class GameUI:
         board_sz = self.game_state.board.size
         self.display = GameDisplay(board_size=board_sz)
 
-        # Bot setup
+        # Bot setup (opponent)
         self.bot = None
         self.bot_player = None
         if config.mode == "pvbot":
             self.bot = create_bot(config)
             self.bot_player = 2 if config.human_player == 1 else 1
+
+        # Analysis bot (for hints/suggestions — can differ from opponent)
+        self.analysis_bot = None
+        if config.analysis_bot_type == "same":
+            self.analysis_bot = self.bot
+        elif config.analysis_bot_type in ("minimax_v1", "minimax_v2"):
+            version = config.analysis_bot_type.split("_")[1]
+            self.analysis_bot = MinimaxBot(version=version, depth=config.analysis_depth)
 
         # State
         self.current_player = 1
@@ -423,7 +431,7 @@ class GameUI:
 
         need = (self.show_bot_thinking or self.show_eval
                 or self.show_my_best or self.show_opp_best)
-        if not self.bot or self.game_over or not need:
+        if not self.analysis_bot or self.game_over or not need:
             self._pv_computing = False
             return
 
@@ -453,7 +461,7 @@ class GameUI:
 
         # --- All actions for current player (used for eval + PV ranking) ---
         try:
-            all_scored = self.bot.get_top_k_actions(gs, player, k=200)
+            all_scored = self.analysis_bot.get_top_k_actions(gs, player, k=200)
         except Exception:
             all_scored = []
         if cancel.is_set():
@@ -461,7 +469,7 @@ class GameUI:
 
         # --- Opponent's best (for eval bar + arrow) ---
         try:
-            top_opp = self.bot.get_top_k_actions(gs, 3 - player, k=1)
+            top_opp = self.analysis_bot.get_top_k_actions(gs, 3 - player, k=1)
         except Exception:
             top_opp = []
         if cancel.is_set():
@@ -534,7 +542,7 @@ class GameUI:
                 if cancel.is_set() or time.time() - t0 > timeout:
                     break
                 try:
-                    top = self.bot.get_top_k_actions(gs, cur_p, k=1)
+                    top = self.analysis_bot.get_top_k_actions(gs, cur_p, k=1)
                 except Exception:
                     break
                 if not top:
@@ -679,8 +687,20 @@ class GameUI:
                             else:
                                 self.bot.depth = max(1, self.bot.depth - 1)
                             self.bot.label = f"Minimax {self.bot.version} (depth {self.bot.depth})"
+                            # Refresh analysis only if analysis uses the same bot
+                            if self.analysis_bot is self.bot:
+                                self._refresh_analysis()
+                            self._show(f"Bot depth: {self.bot.depth}")
+                    elif event.key == pygame.K_a:
+                        mods = pygame.key.get_mods()
+                        if self.analysis_bot and hasattr(self.analysis_bot, 'depth'):
+                            if mods & pygame.KMOD_SHIFT:
+                                self.analysis_bot.depth = self.analysis_bot.depth + 1
+                            else:
+                                self.analysis_bot.depth = max(1, self.analysis_bot.depth - 1)
+                            self.analysis_bot.label = f"Minimax {self.analysis_bot.version} (depth {self.analysis_bot.depth})"
                             self._refresh_analysis()
-                            self._show(f"Minimax depth: {self.bot.depth}")
+                            self._show(f"Analysis depth: {self.analysis_bot.depth}")
                     elif event.key == pygame.K_t:
                         mods = pygame.key.get_mods()
                         if mods & pygame.KMOD_SHIFT:
@@ -740,6 +760,7 @@ class GameUI:
                 legal_shoots=self.legal_shoots,
                 pv_lines=pv_data,
                 bot_label=self.bot.label if self.bot else "",
+                analysis_label=self.analysis_bot.label if self.analysis_bot else "",
                 message=self.message,
                 game_over=self.game_over,
                 winner=self.winner,

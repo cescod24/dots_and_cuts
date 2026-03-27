@@ -30,6 +30,8 @@ class GameConfig:
     human_player: int = 1              # 1 or 2
     map_name: str = "standard"         # "standard", "balanced", "skirmish", "mid_7x7", "small_5x5", "custom"
     custom_game_state: object = None   # GameState from board builder (when map_name="custom")
+    analysis_bot_type: Optional[str] = None   # "minimax_v1", "minimax_v2", "same", or None
+    analysis_depth: int = 3
 
 
 # ---------------------------------------------------------------------------
@@ -209,6 +211,11 @@ class _BotTypeScreen(_Menu):
 
 
 class _DepthScreen(_Menu):
+    def __init__(self, screen, clock, title="Search Depth", subtitle="Higher = stronger but slower"):
+        super().__init__(screen, clock)
+        self._screen_title = title
+        self._screen_subtitle = subtitle
+
     def run(self):
         btns = []
         items = [
@@ -220,8 +227,39 @@ class _DepthScreen(_Menu):
         def draw(click):
             nonlocal btns
             self._bg()
-            self._title("Search Depth", "Higher = stronger but slower")
+            self._title(self._screen_title, self._screen_subtitle)
             btns = self._cards(items, start_y=190, h=58, gap=10)
+            self._footer()
+            if click:
+                for r, v, e in btns:
+                    if r.collidepoint(click) and e:
+                        return v
+        return self._loop(draw)
+
+
+class _AnalysisBotScreen(_Menu):
+    """Select which bot provides move analysis / hints."""
+
+    def __init__(self, screen, clock, is_pvbot):
+        super().__init__(screen, clock)
+        self.is_pvbot = is_pvbot
+
+    def run(self):
+        btns = []
+        items = []
+        if self.is_pvbot:
+            items.append(("Same as opponent", "Use the opponent bot for analysis too", "same", True))
+        items.extend([
+            ("Minimax v1", "Logistic regression evaluation", "minimax_v1", True),
+            ("Minimax v2", "Improved weights from 100k games", "minimax_v2", True),
+            ("None", "No move suggestions", "none", True),
+        ])
+
+        def draw(click):
+            nonlocal btns
+            self._bg()
+            self._title("Analysis Bot", "Choose which bot suggests best moves")
+            btns = self._cards(items, start_y=170, h=58, gap=10)
             self._footer()
             if click:
                 for r, v, e in btns:
@@ -439,7 +477,7 @@ class ModeSelector:
                     state = "builder"
                     continue
                 config.map_name = r
-                return config
+                state = "analysis"
 
             elif state == "builder":
                 from board_builder import BoardBuilderScreen
@@ -450,4 +488,19 @@ class ModeSelector:
                     state = "map"; continue
                 config.map_name = "custom"
                 config.custom_game_state = result
+                state = "analysis"
+
+            elif state == "analysis":
+                r = _AnalysisBotScreen(screen, clock,
+                                       is_pvbot=(config.mode == "pvbot")).run()
+                if r == "__quit__":
+                    return None
+                if r == "__back__":
+                    state = "map"; continue
+                if r == "none":
+                    config.analysis_bot_type = None
+                else:
+                    config.analysis_bot_type = r
+                    if r == "same":
+                        config.analysis_depth = config.minimax_depth
                 return config
