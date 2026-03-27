@@ -204,10 +204,10 @@ class PrebuiltSetups:
         builder.add_piece(0, 1, 0, 0, "orthogonal", 2)
         builder.add_piece(7, 1, 8, 0, "diagonal", 2)
         # Extra pieces (central)
-        builder.add_piece(4, 6, 4, 7, "orthogonal", 1)
-        builder.add_piece(5, 5, 4, 6, "diagonal", 1)
-        builder.add_piece(4, 2, 4, 1, "orthogonal", 2)
-        builder.add_piece(3, 3, 4, 2, "diagonal", 2)
+        builder.add_piece(3, 6, 3, 7, "orthogonal", 1)
+        builder.add_piece(6, 7, 7, 8, "diagonal", 1)
+        builder.add_piece(5, 2, 5, 1, "orthogonal", 2)
+        builder.add_piece(2, 1, 1, 0, "diagonal", 2)
 
         return builder.build()
 
@@ -241,13 +241,13 @@ class PrebuiltSetups:
         builder = GameSetupBuilder(size=7)
         builder.board = board
         # P1: corner pieces + central
-        builder.add_piece(6, 5, 6, 6, "orthogonal", 1)
+        builder.add_piece(2, 5, 1, 6, "diagonal", 1)
         builder.add_piece(1, 5, 0, 6, "diagonal", 1)
-        builder.add_piece(3, 4, 3, 5, "orthogonal", 1)
+        builder.add_piece(6, 5, 6, 6, "orthogonal", 1)
         # P2: corner pieces + central
-        builder.add_piece(0, 1, 0, 0, "orthogonal", 2)
+        builder.add_piece(4, 1, 5, 0, "diagonal", 2)
         builder.add_piece(5, 1, 6, 0, "diagonal", 2)
-        builder.add_piece(3, 2, 3, 1, "orthogonal", 2)
+        builder.add_piece(0, 1, 0, 0, "orthogonal", 2)
 
         return builder.build()
 
